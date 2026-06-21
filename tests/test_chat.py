@@ -201,15 +201,111 @@ def test_chat_completions_custom_model_success(mock_validate):
     }
     headers = {"Authorization": "Bearer clave-con-permiso-custom"}
     
-    with patch("httpx.Client.post", new=mock_post_fn):
-        response = client.post("/v1/chat/completions", json=payload, headers=headers)
+    # Patch configs to isolate this test from .env values
+    from app import config
+    old_provider = config.CUSTOM_MODEL_PROVIDER
+    old_backing = config.CUSTOM_MODEL_BACKING_NAME
+    config.CUSTOM_MODEL_PROVIDER = "ollama"
+    config.CUSTOM_MODEL_BACKING_NAME = "qwen2.5-coder:7b"
+
+    try:
+        with patch("httpx.Client.post", new=mock_post_fn):
+            response = client.post("/v1/chat/completions", json=payload, headers=headers)
+            
+        assert response.status_code == 200
+        data = response.json()
+        assert "meteor" in data["choices"][0]["message"]["content"].lower()
+        assert len(post_calls) > 0
+        assert any("localhost" in str(u) or "127.0.0.1" in str(u) for u in post_calls)
+        assert mock_validate.called
+    finally:
+        config.CUSTOM_MODEL_PROVIDER = old_provider
+        config.CUSTOM_MODEL_BACKING_NAME = old_backing
+
+
+@patch("app.services.key_service.KeyService.validate_key")
+@patch("google.oauth2.service_account.Credentials.from_service_account_file")
+@patch("google.auth.transport.requests.Request")
+def test_chat_completions_vertexai_success(mock_request, mock_from_file, mock_validate):
+    """Prueba que el chat procese con éxito una petición al modelo custom a través de Vertex AI mockeando OAuth2 e HTTP."""
+    mock_validate.return_value = {
+        "valid": True,
+        "owner_name": "VIP User",
+        "rate_limit": 100,
+        "requests_today": 0,
+        "allow_custom_model": True,
+        "dev_mode": False
+    }
+
+    # Mock GCP credentials & token refresh
+    class MockCreds:
+        token = "mock-gcp-token"
+        def refresh(self, request):
+            pass
+    mock_from_file.return_value = MockCreds()
+
+    # Intercept Vertex AI call
+    import httpx
+    original_post = httpx.Client.post
+    post_calls = []
+
+    def mock_post_fn(self, url, *args, **kwargs):
+        post_calls.append(url)
+        if "aiplatform.googleapis.com" in str(url):
+            class MockResponse:
+                status_code = 200
+                def json(self):
+                    return {
+                        "candidates": [
+                          {
+                            "content": {
+                              "role": "model",
+                              "parts": [
+                                {
+                                  "text": "Hola, soy el modelo de Vertex AI."
+                                }
+                              ]
+                            },
+                            "finishReason": "STOP"
+                          }
+                        ],
+                        "usageMetadata": {
+                          "promptTokenCount": 15,
+                          "candidatesTokenCount": 20
+                        },
+                        "responseId": "vertex-mock-id"
+                    }
+            return MockResponse()
+        return original_post(self, url, *args, **kwargs)
+
+    # Patch configs
+    from app import config
+    old_provider = config.CUSTOM_MODEL_PROVIDER
+    old_backing = config.CUSTOM_MODEL_BACKING_NAME
+    config.CUSTOM_MODEL_PROVIDER = "vertexai"
+    config.CUSTOM_MODEL_BACKING_NAME = "projects/753320073574/locations/us-central1/endpoints/7952891298761932800"
+
+    payload = {
+        "model": "tenz-1-meteor",
+        "messages": [{"role": "user", "content": "Hola, meteor"}]
+    }
+    headers = {"Authorization": "Bearer clave-con-permiso-custom"}
+
+    try:
+        with patch("httpx.Client.post", new=mock_post_fn):
+            response = client.post("/v1/chat/completions", json=payload, headers=headers)
         
-    assert response.status_code == 200
-    data = response.json()
-    assert "meteor" in data["choices"][0]["message"]["content"].lower()
-    assert len(post_calls) > 0
-    assert any("localhost" in str(u) or "127.0.0.1" in str(u) for u in post_calls)
-    assert mock_validate.called
+        assert response.status_code == 200
+        data = response.json()
+        assert "vertex" in data["choices"][0]["message"]["content"].lower()
+        assert len(post_calls) > 0
+        assert any("aiplatform.googleapis.com" in str(u) for u in post_calls)
+        assert mock_validate.called
+    finally:
+        # Restore config
+        config.CUSTOM_MODEL_PROVIDER = old_provider
+        config.CUSTOM_MODEL_BACKING_NAME = old_backing
+
 
 
 
