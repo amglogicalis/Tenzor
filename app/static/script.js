@@ -1,9 +1,10 @@
 // ⚙️ Configuración del estado global
 let state = {
-    chats: [],           // Array de chats: { id, title, messages: [{ role, content }] }
-    activeChatId: null,  // ID del chat seleccionado
-    defaultApiKey: "",   // Clave por defecto entregada por el servidor
-    userApiKey: ""       // Clave del cliente configurada en Ajustes (localStorage)
+    chats: [],                 // Array de chats: { id, title, messages: [{ role, content }] }
+    activeChatId: null,        // ID del chat seleccionado
+    defaultApiKey: "",         // Clave por defecto entregada por el servidor
+    userApiKey: "",            // Clave del cliente configurada en Ajustes (localStorage)
+    chatIdBeingRenamed: null   // ID del chat que se está renombrando actualmente
 };
 
 // 🗺️ Selectores DOM
@@ -15,12 +16,22 @@ const currentChatTitle = document.getElementById("current-chat-title");
 const messagesContainer = document.getElementById("messages-container");
 const chatInput = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
+
+// Selector Ajustes Modal
 const settingsBtn = document.getElementById("settings-btn");
 const settingsModal = document.getElementById("settings-modal");
-const closeModalBtn = document.getElementById("close-modal-btn");
+const closeSettingsModalBtn = document.getElementById("close-settings-modal-btn");
 const cancelSettingsBtn = document.getElementById("cancel-settings-btn");
 const saveSettingsBtn = document.getElementById("save-settings-btn");
 const settingsApiKeyInput = document.getElementById("settings-api-key");
+
+// Selector Renombrar Modal
+const renameModal = document.getElementById("rename-modal");
+const renameChatInput = document.getElementById("rename-chat-input");
+const closeRenameModalBtn = document.getElementById("close-rename-modal-btn");
+const cancelRenameBtn = document.getElementById("cancel-rename-btn");
+const saveRenameBtn = document.getElementById("save-rename-btn");
+
 const welcomeScreen = document.getElementById("welcome-screen");
 
 // 🚀 Inicialización de la Aplicación
@@ -113,20 +124,36 @@ function setupEventListeners() {
     // Enviar mensaje al pulsar botón
     sendBtn.addEventListener("click", sendMessage);
 
-    // Modal de ajustes
+    // --- Modal de Ajustes ---
     settingsBtn.addEventListener("click", () => {
         settingsApiKeyInput.value = state.userApiKey;
         settingsModal.classList.add("open");
     });
     
-    const closeModal = () => settingsModal.classList.remove("open");
-    closeModalBtn.addEventListener("click", closeModal);
-    cancelSettingsBtn.addEventListener("click", closeModal);
+    const closeSettings = () => settingsModal.classList.remove("open");
+    closeSettingsModalBtn.addEventListener("click", closeSettings);
+    cancelSettingsBtn.addEventListener("click", closeSettings);
 
     saveSettingsBtn.addEventListener("click", () => {
         state.userApiKey = settingsApiKeyInput.value.trim();
         localStorage.setItem("tenzor_user_api_key", state.userApiKey);
-        closeModal();
+        closeSettings();
+    });
+
+    // --- Modal de Renombrar Chat ---
+    const closeRename = () => {
+        renameModal.classList.remove("open");
+        state.chatIdBeingRenamed = null;
+    };
+    closeRenameModalBtn.addEventListener("click", closeRename);
+    cancelRenameBtn.addEventListener("click", closeRename);
+
+    saveRenameBtn.addEventListener("click", saveChatName);
+    renameChatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            saveChatName();
+        }
     });
 }
 
@@ -191,15 +218,27 @@ function renameChat(chatId, e) {
     const chat = state.chats.find(c => c.id === chatId);
     if (!chat) return;
     
-    const newTitle = prompt("Escribe el nuevo nombre para este chat:", chat.title);
-    if (newTitle && newTitle.trim() !== "") {
-        chat.title = newTitle.trim();
-        saveChatsToStorage();
-        renderChatList();
-        if (state.activeChatId === chatId) {
-            currentChatTitle.textContent = chat.title;
+    state.chatIdBeingRenamed = chatId;
+    renameChatInput.value = chat.title;
+    renameModal.classList.add("open");
+    setTimeout(() => renameChatInput.focus(), 50);
+}
+
+function saveChatName() {
+    const newTitle = renameChatInput.value.trim();
+    if (newTitle && state.chatIdBeingRenamed) {
+        const chat = state.chats.find(c => c.id === state.chatIdBeingRenamed);
+        if (chat) {
+            chat.title = newTitle;
+            saveChatsToStorage();
+            renderChatList();
+            if (state.activeChatId === state.chatIdBeingRenamed) {
+                currentChatTitle.textContent = chat.title;
+            }
         }
     }
+    renameModal.classList.remove("open");
+    state.chatIdBeingRenamed = null;
 }
 
 // 🖥️ Renderizar Sidebar y Elementos Visuales
@@ -232,12 +271,6 @@ function showWelcomeScreen() {
     messagesContainer.innerHTML = "";
     messagesContainer.appendChild(welcomeScreen);
     welcomeScreen.style.display = "flex";
-}
-
-function fillInput(text) {
-    chatInput.value = text;
-    chatInput.dispatchEvent(new Event('input'));
-    chatInput.focus();
 }
 
 // 💬 Enviar y procesar mensajes
