@@ -969,3 +969,59 @@ body.light-theme .model-select {
     border: 2px dashed var(--accent-red);
 }
 
+/* 🎛️ Estilos específicos para el selector de modelos dentro de la barra de entrada */
+.input-container .model-selector-container {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.input-container .model-select {
+    background-color: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: 20px; /* Estilo cápsula */
+    padding: 6px 28px 6px 12px;
+    font-size: 0.8rem;
+    height: 32px;
+    color: var(--text-secondary);
+    background-position: right 8px center;
+    background-size: 11px;
+}
+
+body.light-theme .input-container .model-select {
+    background-color: var(--bg-main);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.input-container .model-select:hover {
+    border-color: var(--accent-red);
+    color: var(--text-primary);
+}
+
+/* 📄 Pastilla de archivo de texto adjunto en burbujas de chat */
+.file-attachment-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 8px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+body.light-theme .file-attachment-pill {
+    background-color: var(--bg-main);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.file-attachment-pill i {
+    color: var(--accent-red);
+    font-size: 1rem;
+}
+
+

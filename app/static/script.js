@@ -575,8 +575,15 @@ function appendMessageMarkup(role, content, images = []) {
     const body = document.createElement("div");
     body.className = "message-body";
 
-    // Procesamos Markdown para ambos roles (el de usuario para renderizar los bloques de código de archivos)
-    body.innerHTML = marked.parse(content);
+    // Reemplazar la representación cruda de archivos adjuntos de texto por una pastilla (pill) visual limpia
+    let displayContent = content;
+    const fileAttachmentRegex = /\n\n---\n📄 \*\*Archivo adjunto: (.+?)\*\*\n\`\`\`[a-zA-Z0-9]*\n[\s\S]*?\n\`\`\`/g;
+    displayContent = displayContent.replace(fileAttachmentRegex, (match, fileName) => {
+        return `\n\n<div class="file-attachment-pill"><i class="fa-solid fa-file-lines"></i> ${fileName}</div>`;
+    });
+
+    // Procesamos Markdown para ambos roles
+    body.innerHTML = marked.parse(displayContent);
     // Formatear código e inyectar botones de copiar
     formatAndAddCopyButtons(body);
 
