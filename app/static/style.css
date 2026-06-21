@@ -97,18 +97,18 @@ body, html {
 }
 
 .app-logo {
-    width: 44px; /* Logo algo más pequeño */
-    height: 44px;
+    width: 32px; /* Logo aún más pequeño */
+    height: 32px;
     object-fit: contain;
-    border-radius: 8px;
-    filter: drop-shadow(0 2px 6px rgba(229, 9, 20, 0.35));
+    border-radius: 6px;
+    filter: drop-shadow(0 2px 4px rgba(229, 9, 20, 0.35));
     margin-top: -1px; /* Centrado vertical milimétrico */
-    margin-right: -2px; /* Reducción de espacio pegado al texto */
+    margin-right: 0px; /* Espaciado ajustado para logo de 32px */
 }
 
 .logo-area h1 {
     font-family: var(--font-display);
-    font-size: 1.6rem; /* Proporcional al nuevo tamaño del logo */
+    font-size: 1.45rem; /* Ajustado proporcionalmente al logo de 32px */
     font-weight: 800;
     letter-spacing: -0.8px;
     color: var(--accent-red); /* Tono sólido igual al logo */
