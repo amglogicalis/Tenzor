@@ -33,15 +33,18 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(chat.router)
 app.include_router(admin.router)
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Montar carpeta de archivos estáticos (CSS, JS, imágenes)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 @app.get("/")
 async def root():
-    return {
-        "status": "online",
-        "name": "Tenzor API",
-        "version": "1.0.0",
-        "message": "Bienvenido a Tenzor, tu asistente experto en programación y cloud.",
-        "documentation": "/docs"
-    }
+    """
+    Sirve el frontend interactivo de Tenzor.
+    """
+    return FileResponse("app/static/index.html")
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host=config.HOST, port=config.PORT, reload=True)

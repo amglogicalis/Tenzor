@@ -6,11 +6,11 @@ from app.models import ChatCompletionResponse, ChatCompletionResponseChoice, Cha
 client = TestClient(app)
 
 def test_root_endpoint():
-    """Prueba que el endpoint raíz responda correctamente."""
+    """Prueba que el endpoint raíz responda correctamente con el HTML del frontend."""
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["status"] == "online"
-    assert response.json()["name"] == "Tenzor API"
+    assert "text/html" in response.headers["content-type"].lower()
+    assert "Tenzor" in response.text
 
 def test_chat_completions_without_auth():
     """Prueba que el endpoint de chat requiera autenticación."""
@@ -22,8 +22,10 @@ def test_chat_completions_without_auth():
     assert response.status_code == 401
     assert "detail" in response.json()
 
-def test_chat_completions_invalid_auth():
-    """Prueba que rechace una API Key inválida."""
+@patch("app.services.key_service.KeyService.validate_key")
+def test_chat_completions_invalid_auth(mock_validate):
+    """Prueba que rechace una API Key inválida mockeando la base de datos."""
+    mock_validate.side_effect = ValueError("API Key no registrada.")
     payload = {
         "model": "tenzor-dev",
         "messages": [{"role": "user", "content": "Hola"}]
@@ -33,10 +35,20 @@ def test_chat_completions_invalid_auth():
     assert response.status_code == 401
     assert "key" in response.json()["detail"].lower()
 
+@patch("app.services.key_service.KeyService.validate_key")
 @patch("app.services.ai_service.AIService.generate_chat_completion")
-def test_chat_completions_success(mock_generate):
-    """Prueba el flujo exitoso de chat usando una key de desarrollo mockeando la llamada a la IA."""
-    # Configurar el mock para evitar llamadas reales a las APIs de Groq/Gemini en los tests
+def test_chat_completions_success(mock_generate, mock_validate):
+    """Prueba el flujo exitoso de chat mockeando la autenticación y la llamada a la IA."""
+    # Configurar el mock de autenticación
+    mock_validate.return_value = {
+        "valid": True,
+        "owner_name": "Test User",
+        "rate_limit": 100,
+        "requests_today": 0,
+        "dev_mode": True
+    }
+
+    # Configurar el mock de generación de la IA
     mock_generate.return_value = ChatCompletionResponse(
         id="test-123",
         created=1700000000,
@@ -55,7 +67,6 @@ def test_chat_completions_success(mock_generate):
         "model": "tenzor-dev",
         "messages": [{"role": "user", "content": "¿Cómo hago un bucle en Python?"}]
     }
-    # En modo desarrollo local, cualquier key que empiece con "tenzor-" es válida
     headers = {"Authorization": "Bearer tenzor-mock-dev-key"}
     
     response = client.post("/v1/chat/completions", json=payload, headers=headers)
@@ -65,3 +76,5 @@ def test_chat_completions_success(mock_generate):
     assert data["id"] == "test-123"
     assert data["choices"][0]["message"]["content"] == "Respuesta simulada sobre programación."
     assert mock_generate.called
+    assert mock_validate.called
+

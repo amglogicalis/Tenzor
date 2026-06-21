@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenzor AI — Chat</title>
+    
+    <!-- Google Fonts: Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Prism.js (Syntax Highlighting) CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-area">
+                    <img src="/static/logo.png" alt="Tenzor Logo" class="app-logo" onerror="this.src='https://placehold.co/40x40/7c3aed/ffffff?text=T'">
+                    <h1>Tenzor <span class="badge">AI</span></h1>
+                </div>
+                <button class="new-chat-btn" id="new-chat-btn">
+                    <i class="fa-solid fa-plus"></i> Nuevo Chat
+                </button>
+            </div>
+            
+            <!-- Chat List -->
+            <div class="chat-list" id="chat-list">
+                <!-- Se poblará dinámicamente con JavaScript -->
+            </div>
+            
+            <div class="sidebar-footer">
+                <button class="footer-action-btn" id="settings-btn">
+                    <i class="fa-solid fa-gear"></i> Ajustes
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <!-- Header -->
+            <header class="chat-header">
+                <button class="sidebar-toggle" id="sidebar-toggle">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="current-chat-title" id="current-chat-title">Nuevo Chat</div>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Online</span>
+                </div>
+            </header>
+
+            <!-- Chat Messages Container -->
+            <div class="messages-container" id="messages-container">
+                <!-- Mensaje de bienvenida inicial -->
+                <div class="welcome-screen" id="welcome-screen">
+                    <img src="/static/logo.png" alt="Tenzor Logo" class="welcome-logo" onerror="this.src='https://placehold.co/80x80/7c3aed/ffffff?text=T'">
+                    <h2>¿En qué te puedo ayudar hoy?</h2>
+                    <p class="subtitle">Pregúntame sobre desarrollo, despliegues en AWS/Azure, plantillas de Terraform o automatizaciones de CI/CD.</p>
+                    
+                    <div class="welcome-suggestions">
+                        <button class="suggestion-card" onclick="fillInput('¿Cómo configuro una VPC en AWS usando Terraform?')">
+                            <i class="fa-solid fa-cloud"></i>
+                            <span>VPC en AWS con Terraform</span>
+                        </button>
+                        <button class="suggestion-card" onclick="fillInput('Escribe un script de bash para automatizar un backup de Docker Postgres')">
+                            <i class="fa-solid fa-database"></i>
+                            <span>Backup de Postgres en Docker</span>
+                        </button>
+                        <button class="suggestion-card" onclick="fillInput('Configura un pipeline en GitHub Actions para compilar una app de Python')">
+                            <i class="fa-solid fa-circle-play"></i>
+                            <span>GitHub Actions para Python</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Bar -->
+            <footer class="chat-footer">
+                <div class="input-container">
+                    <textarea 
+                        id="chat-input" 
+                        placeholder="Pregúntale a Tenzor sobre código o infraestructura..." 
+                        rows="1"
+                    ></textarea>
+                    <button class="send-btn" id="send-btn" disabled>
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+                <p class="footer-disclaimer">Tenzor AI está configurada exclusivamente para temas de desarrollo e infraestructura.</p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Ajustes de Tenzor</h3>
+                <button class="close-modal-btn" id="close-modal-btn">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="settings-api-key">Tus API Keys de Tenzor</label>
+                    <input 
+                        type="password" 
+                        id="settings-api-key" 
+                        placeholder="tenzor-xxxxxxxxxxxxxxxxxxxxxxxx"
+                    >
+                    <small class="help-text">Si la dejas vacía, se intentará usar la clave por defecto de la organización configurada en el servidor.</small>
+                </div>
+                
+                <div class="info-box">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <p>Los chats se almacenan de forma local y privada en tu navegador. Limpiar el historial del navegador eliminará tus chats.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-settings-btn">Cancelar</button>
+                <button class="btn btn-primary" id="save-settings-btn">Guardar Ajustes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Marked.js (Markdown Parser) via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <!-- Prism.js (Syntax Highlighting) Core + Languages via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <!-- Custom Script -->
+    <script src="/static/script.js"></script>
+</body>
+</html>

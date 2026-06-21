@@ -38,3 +38,13 @@ async def chat_completion(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+@router.get("/config")
+async def get_config():
+    """
+    Devuelve la clave de cliente por defecto para el frontend.
+    """
+    from app import config
+    return {
+        "default_api_key": config.DEFAULT_CLIENT_KEY
+    }
