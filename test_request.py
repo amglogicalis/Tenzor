@@ -2,7 +2,7 @@ import httpx
 
 url = "http://127.0.0.1:8000/v1/chat/completions"
 headers = {
-    "Authorization": "Bearer tenzor-dev-test-key",
+    "Authorization": "Bearer tenzor-c41a63ce7244e22de59a73fd79abccf1",
     "Content-Type": "application/json"
 }
 

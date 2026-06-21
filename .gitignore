@@ -13,3 +13,4 @@ pip-delete-this-directory.txt
 .vscode/
 .idea/
 .pytest_cache/
+instrucciones.md
