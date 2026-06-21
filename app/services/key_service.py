@@ -29,6 +29,8 @@ class KeyService:
         """
         if not api_key:
             raise ValueError("API Key faltante en la petición.")
+        
+        api_key = api_key.strip()
 
         if self.dev_mode:
             # En modo desarrollo, aceptamos cualquier clave que empiece por 'tenzor-'

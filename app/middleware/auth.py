@@ -17,7 +17,7 @@ async def verify_api_key(credentials: HTTPAuthorizationCredentials = Security(se
             detail="Falta el token de autorización (Bearer Token)."
         )
     
-    api_key = credentials.credentials
+    api_key = credentials.credentials.strip()
     try:
         key_info = key_service.validate_key(api_key)
         return key_info
