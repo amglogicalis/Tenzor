@@ -4,6 +4,7 @@ let state = {
     activeChatId: null,        // ID del chat seleccionado
     defaultApiKey: "",         // Clave por defecto entregada por el servidor
     userApiKey: "",            // Clave del cliente configurada en Ajustes (localStorage)
+    theme: "dark",             // Tema actual: "dark" u "light"
     chatIdBeingRenamed: null   // ID del chat que se está renombrando actualmente
 };
 
@@ -24,6 +25,7 @@ const closeSettingsModalBtn = document.getElementById("close-settings-modal-btn"
 const cancelSettingsBtn = document.getElementById("cancel-settings-btn");
 const saveSettingsBtn = document.getElementById("save-settings-btn");
 const settingsApiKeyInput = document.getElementById("settings-api-key");
+const settingsThemeSelect = document.getElementById("settings-theme");
 
 // Selector Renombrar Modal
 const renameModal = document.getElementById("rename-modal");
@@ -40,16 +42,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.userApiKey = localStorage.getItem("tenzor_user_api_key") || "";
     settingsApiKeyInput.value = state.userApiKey;
 
-    // 2. Obtener clave por defecto del servidor
+    // 2. Cargar tema visual guardado
+    state.theme = localStorage.getItem("tenzor_theme") || "dark";
+    applyTheme(state.theme);
+    settingsThemeSelect.value = state.theme;
+
+    // 3. Obtener clave por defecto del servidor
     await fetchDefaultConfig();
 
-    // 3. Cargar chats guardados
+    // 4. Cargar chats guardados
     loadChatsFromStorage();
 
-    // 4. Registrar Event Listeners
+    // 5. Registrar Event Listeners
     setupEventListeners();
 
-    // 5. Renderizar interfaz inicial
+    // 6. Renderizar interfaz inicial
     renderChatList();
     if (state.chats.length > 0) {
         selectChat(state.chats[0].id);
@@ -86,6 +93,15 @@ function loadChatsFromStorage() {
 
 function saveChatsToStorage() {
     localStorage.setItem("tenzor_chats", JSON.stringify(state.chats));
+}
+
+// 🌓 Lógica de Tema Visual (Claro / Oscuro)
+function applyTheme(theme) {
+    if (theme === "light") {
+        document.body.classList.add("light-theme");
+    } else {
+        document.body.classList.remove("light-theme");
+    }
 }
 
 // 🎛️ Registrar Event Listeners
@@ -127,6 +143,7 @@ function setupEventListeners() {
     // --- Modal de Ajustes ---
     settingsBtn.addEventListener("click", () => {
         settingsApiKeyInput.value = state.userApiKey;
+        settingsThemeSelect.value = state.theme;
         settingsModal.classList.add("open");
     });
     
@@ -135,8 +152,15 @@ function setupEventListeners() {
     cancelSettingsBtn.addEventListener("click", closeSettings);
 
     saveSettingsBtn.addEventListener("click", () => {
+        // Guardar API Key
         state.userApiKey = settingsApiKeyInput.value.trim();
         localStorage.setItem("tenzor_user_api_key", state.userApiKey);
+
+        // Guardar y Aplicar Tema
+        state.theme = settingsThemeSelect.value;
+        localStorage.setItem("tenzor_theme", state.theme);
+        applyTheme(state.theme);
+
         closeSettings();
     });
 

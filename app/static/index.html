@@ -25,7 +25,7 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo-area">
-                    <img src="/static/logo.png" alt="Tenzor Logo" class="app-logo" onerror="this.src='https://placehold.co/44x44/ef4444/ffffff?text=T'">
+                    <img src="/static/logo.png" alt="Tenzor Logo" class="app-logo" onerror="this.src='https://placehold.co/48x48/ef4444/ffffff?text=T'">
                     <h1>Tenzor <span class="badge">AI</span></h1>
                 </div>
                 <button class="new-chat-btn" id="new-chat-btn">
@@ -63,7 +63,7 @@
             <div class="messages-container" id="messages-container">
                 <!-- Mensaje de bienvenida inicial -->
                 <div class="welcome-screen" id="welcome-screen">
-                    <img src="/static/logo.png" alt="Tenzor Logo" class="welcome-logo" onerror="this.src='https://placehold.co/120x120/ef4444/ffffff?text=Tenzor'">
+                    <img src="/static/logo.png" alt="Tenzor Logo" class="welcome-logo" onerror="this.src='https://placehold.co/132x132/ef4444/ffffff?text=Tenzor'">
                     <h2>¿En qué te puedo ayudar hoy?</h2>
                     <p class="subtitle">Pregúntame sobre desarrollo, despliegues en AWS/Azure, plantillas de Terraform o automatizaciones de CI/CD.</p>
                 </div>
@@ -104,6 +104,14 @@
                         placeholder="tenzor-xxxxxxxxxxxxxxxxxxxxxxxx"
                     >
                     <small class="help-text">Si la dejas vacía, se intentará usar la clave por defecto de la organización configurada en el servidor.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="settings-theme">Tema Visual</label>
+                    <select id="settings-theme" class="form-select">
+                        <option value="dark">Oscuro (Rojizo)</option>
+                        <option value="light">Claro (Blanco)</option>
+                    </select>
                 </div>
                 
                 <div class="info-box">
