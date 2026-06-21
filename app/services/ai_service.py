@@ -1,6 +1,7 @@
 import time
 import uuid
 import logging
+import base64
 from typing import List, Optional
 from groq import Groq
 import google.generativeai as genai
@@ -45,8 +46,11 @@ class AIService:
             role = msg.role if msg.role in ["user", "assistant", "system"] else "user"
             formatted_messages.append({"role": role, "content": msg.content})
 
-        # 1. Intentar con la lista de modelos de Groq (en orden de prioridad)
-        if self.groq_client:
+        # Comprobar si hay imágenes en la conversación para forzar el uso de Gemini
+        has_images = any(msg.images for msg in messages if msg.images)
+
+        # 1. Intentar con la lista de modelos de Groq (en orden de prioridad), si no hay imágenes
+        if self.groq_client and not has_images:
             groq_models = ["llama-3.3-70b-versatile", "qwen/qwen3.6-27b"]
             for model_name in groq_models:
                 try:
@@ -111,9 +115,27 @@ class AIService:
                     for msg in messages:
                         # Mapeamos roles a los aceptados por Gemini (user, model)
                         role = "user" if msg.role == "user" else "model"
+                        parts = [msg.content]
+                        if msg.images:
+                            for img_b64 in msg.images:
+                                try:
+                                    if ";base64," in img_b64:
+                                        header, data = img_b64.split(";base64,")
+                                        mime_type = header.replace("data:", "")
+                                    else:
+                                        mime_type = "image/jpeg"
+                                        data = img_b64
+                                    
+                                    parts.append({
+                                        "mime_type": mime_type,
+                                        "data": base64.b64decode(data)
+                                    })
+                                except Exception as img_err:
+                                    logger.error(f"Error decodificando imagen base64: {img_err}")
+                        
                         gemini_contents.append({
                             "role": role,
-                            "parts": [msg.content]
+                            "parts": parts
                         })
                     
                     generation_config = genai.types.GenerationConfig(

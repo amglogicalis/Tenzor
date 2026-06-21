@@ -78,3 +78,51 @@ def test_chat_completions_success(mock_generate, mock_validate):
     assert mock_generate.called
     assert mock_validate.called
 
+@patch("app.services.key_service.KeyService.validate_key")
+@patch("app.services.ai_service.AIService.generate_chat_completion")
+def test_chat_completions_with_images_success(mock_generate, mock_validate):
+    """Prueba que el endpoint de chat admita imágenes en la petición."""
+    mock_validate.return_value = {
+        "valid": True,
+        "owner_name": "Test User",
+        "rate_limit": 100,
+        "requests_today": 0,
+        "dev_mode": True
+    }
+    
+    mock_generate.return_value = ChatCompletionResponse(
+        id="test-img-123",
+        created=1700000000,
+        model="tenzor-dev (mock)",
+        choices=[
+            ChatCompletionResponseChoice(
+                index=0,
+                message=Message(role="assistant", content="Veo la imagen correctamente."),
+                finish_reason="stop"
+            )
+        ],
+        usage=ChatCompletionResponseUsage(prompt_tokens=10, completion_tokens=10, total_tokens=20)
+    )
+
+    payload = {
+        "model": "tenzor-dev",
+        "messages": [
+            {
+                "role": "user",
+                "content": "¿Qué es esta imagen?",
+                "images": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="]
+            }
+        ]
+    }
+    headers = {"Authorization": "Bearer tenzor-mock-dev-key"}
+    
+    response = client.post("/v1/chat/completions", json=payload, headers=headers)
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == "test-img-123"
+    assert data["choices"][0]["message"]["content"] == "Veo la imagen correctamente."
+    assert mock_generate.called
+    assert mock_validate.called
+
+

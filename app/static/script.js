@@ -1,10 +1,11 @@
 // ⚙️ Configuración del estado global
 let state = {
-    chats: [],                 // Array de chats: { id, title, messages: [{ role, content }] }
+    chats: [],                 // Array de chats: { id, title, messages: [{ role, content, images }] }
     activeChatId: null,        // ID del chat seleccionado
     userApiKey: "",            // Clave del cliente configurada en Ajustes (localStorage)
     theme: "dark",             // Tema actual: "dark" u "light"
-    chatIdBeingRenamed: null   // ID del chat que se está renombrando actualmente
+    chatIdBeingRenamed: null,  // ID del chat que se está renombrando actualmente
+    attachments: []            // Archivos adjuntos en espera: { name, type, content, isImage }
 };
 
 // 🗺️ Selectores DOM
@@ -16,6 +17,10 @@ const currentChatTitle = document.getElementById("current-chat-title");
 const messagesContainer = document.getElementById("messages-container");
 const chatInput = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
+const attachBtn = document.getElementById("attach-btn");
+const chatFileInput = document.getElementById("chat-file-input");
+const attachmentPreview = document.getElementById("attachment-preview");
+const chatArea = document.querySelector(".chat-area");
 
 // Selector Ajustes Modal
 const settingsBtn = document.getElementById("settings-btn");
@@ -110,7 +115,37 @@ function setupEventListeners() {
     chatInput.addEventListener("input", () => {
         chatInput.style.height = "auto";
         chatInput.style.height = (chatInput.scrollHeight) + "px";
-        sendBtn.disabled = chatInput.value.trim() === "";
+        updateSendButtonState();
+    });
+
+    // Abrir selector de archivos
+    attachBtn.addEventListener("click", () => {
+        chatFileInput.click();
+    });
+
+    // Procesar archivos seleccionados
+    chatFileInput.addEventListener("change", (e) => {
+        handleFilesSelect(e.target.files);
+        chatFileInput.value = ""; // Limpiar selector
+    });
+
+    // Soporte para arrastrar archivos (Drag & Drop)
+    chatArea.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        chatArea.classList.add("drag-active");
+    });
+
+    chatArea.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        chatArea.classList.remove("drag-active");
+    });
+
+    chatArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        chatArea.classList.remove("drag-active");
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleFilesSelect(e.dataTransfer.files);
+        }
     });
 
     // Enviar mensaje al pulsar Enter (sin Shift)
@@ -195,7 +230,7 @@ function selectChat(chatId) {
     } else {
         welcomeScreen.style.display = "none";
         activeChat.messages.forEach(msg => {
-            appendMessageMarkup(msg.role, msg.content);
+            appendMessageMarkup(msg.role, msg.content, msg.images);
         });
         scrollToBottom();
     }
@@ -282,9 +317,121 @@ function showWelcomeScreen() {
 }
 
 // 💬 Enviar y procesar mensajes
+// 📎 Procesar selección y arrastre de archivos
+function handleFilesSelect(files) {
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach(file => {
+        // Limitar tamaño a 15MB
+        if (file.size > 15 * 1024 * 1024) {
+            alert(`El archivo ${file.name} es demasiado grande. El límite es 15MB.`);
+            return;
+        }
+
+        const isImage = file.type.startsWith("image/");
+        const reader = new FileReader();
+
+        if (isImage) {
+            reader.onload = (e) => {
+                state.attachments.push({
+                    name: file.name,
+                    type: file.type,
+                    content: e.target.result, // base64 data URL
+                    isImage: true
+                });
+                renderAttachmentsPreview();
+                updateSendButtonState();
+            };
+            reader.readAsDataURL(file);
+        } else {
+            // Asumir que es archivo de texto (logs, código, etc.)
+            reader.onload = (e) => {
+                state.attachments.push({
+                    name: file.name,
+                    type: file.type,
+                    content: e.target.result, // texto plano
+                    isImage: false
+                });
+                renderAttachmentsPreview();
+                updateSendButtonState();
+            };
+            reader.readAsText(file);
+        }
+    });
+}
+
+function renderAttachmentsPreview() {
+    attachmentPreview.innerHTML = "";
+    
+    if (state.attachments.length === 0) {
+        attachmentPreview.style.display = "none";
+        return;
+    }
+
+    attachmentPreview.style.display = "flex";
+
+    state.attachments.forEach((file, index) => {
+        const item = document.createElement("div");
+        item.className = `preview-item ${file.isImage ? 'image' : ''}`;
+        
+        if (file.isImage) {
+            item.innerHTML = `
+                <img src="${file.content}" alt="${escapeHTML(file.name)}">
+                <button class="remove-btn" onclick="removeAttachment(${index})">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+        } else {
+            item.innerHTML = `
+                <i class="fa-solid fa-file-code"></i>
+                <span>${escapeHTML(file.name)}</span>
+                <button class="remove-btn" onclick="removeAttachment(${index})">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+        }
+        
+        attachmentPreview.appendChild(item);
+    });
+}
+
+// Hacer la función accesible globalmente para el onclick en los botones de remove
+window.removeAttachment = function(index) {
+    state.attachments.splice(index, 1);
+    renderAttachmentsPreview();
+    updateSendButtonState();
+};
+
+function updateSendButtonState() {
+    sendBtn.disabled = chatInput.value.trim() === "" && state.attachments.length === 0;
+}
+
+function getFileExtension(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const map = {
+        'py': 'python',
+        'js': 'javascript',
+        'ts': 'typescript',
+        'json': 'json',
+        'html': 'html',
+        'css': 'css',
+        'sh': 'bash',
+        'bash': 'bash',
+        'yml': 'yaml',
+        'yaml': 'yaml',
+        'md': 'markdown',
+        'log': 'log',
+        'csv': 'csv'
+    };
+    return map[ext] || 'text';
+}
+
+// 💬 Enviar y procesar mensajes
 async function sendMessage() {
     const text = chatInput.value.trim();
-    if (!text) return;
+    const attachments = [...state.attachments];
+    
+    if (!text && attachments.length === 0) return;
 
     // Si no hay un chat activo, crearlo
     if (!state.activeChatId) {
@@ -294,34 +441,54 @@ async function sendMessage() {
     const activeChat = state.chats.find(c => c.id === state.activeChatId);
     if (!activeChat) return;
 
-    // Limpiar input
+    // Limpiar input y previsualización
     chatInput.value = "";
     chatInput.style.height = "auto";
+    state.attachments = [];
+    renderAttachmentsPreview();
     sendBtn.disabled = true;
 
     // Ocultar pantalla de bienvenida
     welcomeScreen.style.display = "none";
 
-    // 1. Agregar y mostrar mensaje del usuario
-    const userMessage = { role: "user", content: text };
+    // 1. Procesar archivos de texto para inyectarlos en el contenido del mensaje
+    let fullText = text;
+    const textFiles = attachments.filter(a => !a.isImage);
+    if (textFiles.length > 0) {
+        textFiles.forEach(file => {
+            // Añadir salto de línea y código markdown formateado
+            fullText += `\n\n---\n📄 **Archivo adjunto: ${file.name}**\n\`\`\`${getFileExtension(file.name)}\n${file.content}\n\`\`\``;
+        });
+    }
+
+    // 2. Procesar imágenes para enviarlas en el campo images
+    const images = attachments.filter(a => a.isImage).map(a => a.content);
+
+    // 3. Agregar y mostrar mensaje del usuario en el estado local
+    const userMessage = { role: "user", content: fullText };
+    if (images.length > 0) {
+        userMessage.images = images;
+    }
+    
     activeChat.messages.push(userMessage);
-    appendMessageMarkup("user", text);
+    appendMessageMarkup("user", fullText, images);
     scrollToBottom();
 
-    // 2. Si el título del chat es el genérico inicial, renombrarlo automáticamente con las primeras palabras
+    // 4. Si el título del chat es el genérico inicial, renombrarlo automáticamente con las primeras palabras
     if (activeChat.title.startsWith("Nuevo Chat ")) {
-        activeChat.title = text.length > 25 ? text.substring(0, 22) + "..." : text;
+        const displayTitle = text || (textFiles.length > 0 ? textFiles[0].name : "Archivo Adjunto");
+        activeChat.title = displayTitle.length > 25 ? displayTitle.substring(0, 22) + "..." : displayTitle;
         renderChatList();
     }
 
     // Guardar estado local
     saveChatsToStorage();
 
-    // 3. Crear contenedor y animación de carga para la respuesta del asistente
+    // 5. Crear contenedor y animación de carga para la respuesta del asistente
     const typingIndicator = appendTypingIndicator();
     scrollToBottom();
 
-    // 4. Obtener clave de autorización a enviar
+    // 6. Obtener clave de autorización a enviar
     const apiKeyToSend = state.userApiKey;
     if (!apiKeyToSend) {
         removeTypingIndicator(typingIndicator);
@@ -330,7 +497,7 @@ async function sendMessage() {
         return;
     }
 
-    // 5. Enviar petición HTTP al Backend
+    // 7. Enviar petición HTTP al Backend
     try {
         const response = await fetch("/v1/chat/completions", {
             method: "POST",
@@ -340,7 +507,11 @@ async function sendMessage() {
             },
             body: JSON.stringify({
                 model: "tenzor-dev",
-                messages: activeChat.messages,
+                messages: activeChat.messages.map(m => ({
+                    role: m.role,
+                    content: m.content,
+                    images: m.images || null
+                })),
                 temperature: 0.7
             })
         });
@@ -377,7 +548,7 @@ async function sendMessage() {
 }
 
 // 📦 Renderizadores de Mensajes en el DOM
-function appendMessageMarkup(role, content) {
+function appendMessageMarkup(role, content, images = []) {
     const row = document.createElement("div");
     row.className = `message-row ${role}`;
 
@@ -397,15 +568,39 @@ function appendMessageMarkup(role, content) {
     const body = document.createElement("div");
     body.className = "message-body";
 
-    // Si es asistente, procesar Markdown; si es usuario, texto plano seguro
-    if (role === "assistant") {
-        body.innerHTML = marked.parse(content);
-        // Formatear código e inyectar botones de copiar
-        formatAndAddCopyButtons(body);
-    } else {
-        const p = document.createElement("p");
-        p.textContent = content;
-        body.appendChild(p);
+    // Procesamos Markdown para ambos roles (el de usuario para renderizar los bloques de código de archivos)
+    body.innerHTML = marked.parse(content);
+    // Formatear código e inyectar botones de copiar
+    formatAndAddCopyButtons(body);
+
+    // Si hay imágenes asociadas a este mensaje, renderizarlas abajo
+    if (images && images.length > 0) {
+        const imgGrid = document.createElement("div");
+        imgGrid.className = "chat-images-grid";
+        imgGrid.style.display = "flex";
+        imgGrid.style.flexWrap = "wrap";
+        imgGrid.style.gap = "10px";
+        imgGrid.style.marginTop = "12px";
+
+        images.forEach(imgSrc => {
+            const imgWrapper = document.createElement("div");
+            imgWrapper.style.maxWidth = "240px";
+            imgWrapper.style.maxHeight = "180px";
+            imgWrapper.style.borderRadius = "8px";
+            imgWrapper.style.overflow = "hidden";
+            imgWrapper.style.border = "1px solid var(--border-color)";
+
+            const img = document.createElement("img");
+            img.src = imgSrc;
+            img.style.width = "100%";
+            img.style.height = "100%";
+            img.style.objectFit = "cover";
+
+            imgWrapper.appendChild(img);
+            imgGrid.appendChild(imgWrapper);
+        });
+
+        body.appendChild(imgGrid);
     }
 
     contentDiv.appendChild(avatar);

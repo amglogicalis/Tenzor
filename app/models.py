@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 class Message(BaseModel):
     role: str
     content: str
+    images: Optional[List[str]] = None
 
 class ChatCompletionRequest(BaseModel):
     model: str = "tenzor-dev"

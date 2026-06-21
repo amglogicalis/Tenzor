@@ -75,12 +75,17 @@
 
             <!-- Input Bar -->
             <footer class="chat-footer">
+                <div class="attachment-preview" id="attachment-preview" style="display: none;"></div>
                 <div class="input-container">
+                    <button class="attach-btn" id="attach-btn" title="Adjuntar archivos o imágenes">
+                        <i class="fa-solid fa-paperclip"></i>
+                    </button>
                     <textarea 
                         id="chat-input" 
                         placeholder="Pregúntale a Tenzor sobre código o infraestructura..." 
                         rows="1"
                     ></textarea>
+                    <input type="file" id="chat-file-input" multiple accept="image/*,.txt,.log,.py,.js,.json,.sh,.yml,.yaml,.md,.csv" style="display: none;">
                     <button class="send-btn" id="send-btn" disabled>
                         <i class="fa-solid fa-paper-plane"></i>
                     </button>
