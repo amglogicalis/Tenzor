@@ -2,7 +2,6 @@
 let state = {
     chats: [],                 // Array de chats: { id, title, messages: [{ role, content }] }
     activeChatId: null,        // ID del chat seleccionado
-    defaultApiKey: "",         // Clave por defecto entregada por el servidor
     userApiKey: "",            // Clave del cliente configurada en Ajustes (localStorage)
     theme: "dark",             // Tema actual: "dark" u "light"
     chatIdBeingRenamed: null   // ID del chat que se está renombrando actualmente
@@ -47,16 +46,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyTheme(state.theme);
     settingsThemeSelect.value = state.theme;
 
-    // 3. Obtener clave por defecto del servidor
-    await fetchDefaultConfig();
-
-    // 4. Cargar chats guardados
+    // 3. Cargar chats guardados
     loadChatsFromStorage();
 
-    // 5. Registrar Event Listeners
+    // 4. Registrar Event Listeners
     setupEventListeners();
 
-    // 6. Renderizar interfaz inicial
+    // 5. Renderizar interfaz inicial
     renderChatList();
     if (state.chats.length > 0) {
         selectChat(state.chats[0].id);
@@ -65,19 +61,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// 🌐 Peticiones API a Tenzor Backend
-async function fetchDefaultConfig() {
-    try {
-        const response = await fetch("/v1/config");
-        if (response.ok) {
-            const data = await response.json();
-            state.defaultApiKey = data.default_api_key || "";
-            console.log("Configuración por defecto del servidor cargada.");
-        }
-    } catch (e) {
-        console.error("Error obteniendo clave por defecto del servidor:", e);
-    }
-}
+
 
 // 💾 Gestión del almacenamiento local (localStorage)
 function loadChatsFromStorage() {
@@ -338,10 +322,10 @@ async function sendMessage() {
     scrollToBottom();
 
     // 4. Obtener clave de autorización a enviar
-    const apiKeyToSend = state.userApiKey || state.defaultApiKey;
+    const apiKeyToSend = state.userApiKey;
     if (!apiKeyToSend) {
         removeTypingIndicator(typingIndicator);
-        appendMessageMarkup("assistant", "⚠️ Error: No has configurado tu API Key de Tenzor y tampoco hay una por defecto en el servidor. Configúrala en Ajustes.");
+        appendMessageMarkup("assistant", "⚠️ No has configurado tu API Key de Tenzor. Entra en **Ajustes** (icono de engranaje) y pégala en el campo correspondiente.");
         scrollToBottom();
         return;
     }
