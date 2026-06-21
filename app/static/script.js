@@ -5,7 +5,8 @@ let state = {
     userApiKey: "",            // Clave del cliente configurada en Ajustes (localStorage)
     theme: "dark",             // Tema actual: "dark" u "light"
     chatIdBeingRenamed: null,  // ID del chat que se está renombrando actualmente
-    attachments: []            // Archivos adjuntos en espera: { name, type, content, isImage }
+    attachments: [],           // Archivos adjuntos en espera: { name, type, content, isImage }
+    selectedModel: "tenzor-dev" // Modelo de IA seleccionado actualmente
 };
 
 // 🗺️ Selectores DOM
@@ -21,6 +22,7 @@ const attachBtn = document.getElementById("attach-btn");
 const chatFileInput = document.getElementById("chat-file-input");
 const attachmentPreview = document.getElementById("attachment-preview");
 const chatArea = document.querySelector(".chat-area");
+const modelSelector = document.getElementById("model-selector");
 
 // Selector Ajustes Modal
 const settingsBtn = document.getElementById("settings-btn");
@@ -146,6 +148,11 @@ function setupEventListeners() {
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             handleFilesSelect(e.dataTransfer.files);
         }
+    });
+
+    // Cambiar de modelo de IA
+    modelSelector.addEventListener("change", (e) => {
+        state.selectedModel = e.target.value;
     });
 
     // Enviar mensaje al pulsar Enter (sin Shift)
@@ -506,7 +513,7 @@ async function sendMessage() {
                 "Authorization": `Bearer ${apiKeyToSend}`
             },
             body: JSON.stringify({
-                model: "tenzor-dev",
+                model: state.selectedModel,
                 messages: activeChat.messages.map(m => ({
                     role: m.role,
                     content: m.content,

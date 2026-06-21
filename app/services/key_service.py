@@ -38,6 +38,7 @@ class KeyService:
                     "owner_name": "Dev User",
                     "rate_limit": 100,
                     "requests_today": 0,
+                    "allow_custom_model": True,
                     "dev_mode": True
                 }
             raise ValueError("API Key inválida. En modo desarrollo debe comenzar con 'tenzor-'.")
@@ -108,6 +109,7 @@ class KeyService:
                 "owner_name": key_info.get("owner_name"),
                 "rate_limit": rate_limit,
                 "requests_today": requests_today + 1,
+                "allow_custom_model": key_info.get("allow_custom_model", False),
                 "dev_mode": False
             }
 
@@ -127,7 +129,13 @@ class KeyService:
         except Exception as e:
             logger.error(f"Error actualizando contadores de API Key: {e}")
 
-    def create_api_key(self, owner_name: str, rate_limit: int = 100, expires_in_days: Optional[int] = None) -> str:
+    def create_api_key(
+        self, 
+        owner_name: str, 
+        rate_limit: int = 100, 
+        expires_in_days: Optional[int] = None,
+        allow_custom_model: bool = False
+    ) -> str:
         """
         Crea una nueva API key en Supabase.
         Lanza una excepción si Supabase no está configurado.
@@ -151,7 +159,8 @@ class KeyService:
                 "owner_name": owner_name,
                 "rate_limit": rate_limit,
                 "is_active": True,
-                "expires_at": expires_at_dt
+                "expires_at": expires_at_dt,
+                "allow_custom_model": allow_custom_model
             }).execute()
             return new_key
         except Exception as e:

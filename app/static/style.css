@@ -926,3 +926,46 @@ body.light-theme .btn-secondary:hover {
     font-size: 0.95rem;
 }
 
+/* 🎛️ Selector de Modelos en Cabecera */
+.model-selector-container {
+    margin-left: 20px;
+    margin-right: auto; /* Empuja el status-indicator a la derecha */
+}
+
+.model-select {
+    background-color: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    padding: 6px 36px 6px 12px;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3D%22//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23e50914%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 14px;
+}
+
+body.light-theme .model-select {
+    background-color: var(--bg-sidebar);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.model-select:hover, .model-select:focus {
+    border-color: var(--accent-red);
+    box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.15);
+}
+
+/* Soporte para efecto drag-active visual */
+.chat-area.drag-active {
+    background-color: rgba(229, 9, 20, 0.02) !important;
+    border: 2px dashed var(--accent-red);
+}
+

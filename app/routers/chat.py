@@ -28,10 +28,18 @@ async def chat_completion(
     try:
         response = ai_service.generate_chat_completion(
             messages=request.messages,
+            model=request.model,
+            key_info=key_info,
             temperature=request.temperature,
             max_tokens=request.max_tokens
         )
         return response
+    except ValueError as e:
+        logger.warning(f"Error de validación en chat completion: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Error procesando chat completion: {e}")
         raise HTTPException(

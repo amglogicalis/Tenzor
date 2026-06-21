@@ -138,5 +138,79 @@ def test_chat_completions_expired_key(mock_validate):
     assert response.status_code == 401
     assert "caducada" in response.json()["detail"].lower()
 
+@patch("app.services.key_service.KeyService.validate_key")
+def test_chat_completions_custom_model_forbidden(mock_validate):
+    """Prueba que el chat rechace una petición al modelo custom si la key no tiene permiso (403)."""
+    mock_validate.return_value = {
+        "valid": True,
+        "owner_name": "Standard User",
+        "rate_limit": 100,
+        "requests_today": 0,
+        "allow_custom_model": False,
+        "dev_mode": False
+    }
+    payload = {
+        "model": "tenz-1-meteor",
+        "messages": [{"role": "user", "content": "Hola"}]
+    }
+    headers = {"Authorization": "Bearer clave-sin-permiso-custom"}
+    response = client.post("/v1/chat/completions", json=payload, headers=headers)
+    assert response.status_code == 403
+    assert "permisos" in response.json()["detail"].lower()
+
+@patch("app.services.key_service.KeyService.validate_key")
+def test_chat_completions_custom_model_success(mock_validate):
+    """Prueba que el chat procese con éxito una petición al modelo custom a través de Ollama mockeando HTTP."""
+    mock_validate.return_value = {
+        "valid": True,
+        "owner_name": "VIP User",
+        "rate_limit": 100,
+        "requests_today": 0,
+        "allow_custom_model": True,
+        "dev_mode": False
+    }
+    
+    import httpx
+    original_post = httpx.Client.post
+    post_calls = []
+
+    def mock_post_fn(self, url, *args, **kwargs):
+        post_calls.append(url)
+        if "localhost" in str(url) or "127.0.0.1" in str(url):
+            class MockResponse:
+                status_code = 200
+                def json(self):
+                    return {
+                        "id": "chatcmpl-mock",
+                        "created": 1700000000,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {"role": "assistant", "content": "Hola, soy el modelo meteor personalizado."},
+                                "finish_reason": "stop"
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20}
+                    }
+            return MockResponse()
+        return original_post(self, url, *args, **kwargs)
+
+    payload = {
+        "model": "tenz-1-meteor",
+        "messages": [{"role": "user", "content": "Hola, meteor"}]
+    }
+    headers = {"Authorization": "Bearer clave-con-permiso-custom"}
+    
+    with patch("httpx.Client.post", new=mock_post_fn):
+        response = client.post("/v1/chat/completions", json=payload, headers=headers)
+        
+    assert response.status_code == 200
+    data = response.json()
+    assert "meteor" in data["choices"][0]["message"]["content"].lower()
+    assert len(post_calls) > 0
+    assert any("localhost" in str(u) or "127.0.0.1" in str(u) for u in post_calls)
+    assert mock_validate.called
+
+
 
 

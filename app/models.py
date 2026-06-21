@@ -36,6 +36,7 @@ class APIKeyCreate(BaseModel):
     owner_name: str
     rate_limit: Optional[int] = 100
     expires_in_days: Optional[int] = None
+    allow_custom_model: Optional[bool] = False
 
 class APIKeyResponse(BaseModel):
     id: str
@@ -47,3 +48,4 @@ class APIKeyResponse(BaseModel):
     total_requests: int
     created_at: str
     expires_at: Optional[str] = None
+    allow_custom_model: bool = False
