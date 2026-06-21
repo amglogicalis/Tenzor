@@ -8,9 +8,9 @@
     --bg-message-assistant: #0f0507;
     --text-primary: #fbeee0;
     --text-secondary: #ad9a9d;
-    --accent-red: #f43f5e;
-    --accent-dark-red: #9f1239;
-    --accent-gradient: linear-gradient(135deg, #f43f5e 0%, #9f1239 100%);
+    --accent-red: #e50914;
+    --accent-dark-red: #991b1b;
+    --accent-gradient: linear-gradient(135deg, #e50914 0%, #991b1b 100%);
     --border-color: #2e1216;
     --border-radius-sm: 8px;
     --border-radius-md: 12px;
@@ -93,27 +93,25 @@ body, html {
 .logo-area {
     display: flex;
     align-items: center;
-    gap: 0px; /* Reducido al mínimo */
+    gap: 0px;
 }
 
 .app-logo {
-    width: 60px; /* Logo más grande */
-    height: 60px;
+    width: 44px; /* Logo algo más pequeño */
+    height: 44px;
     object-fit: contain;
     border-radius: 8px;
-    filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.3));
-    margin-top: -1px; /* Ajuste milimétrico de centrado vertical */
-    margin-right: -4px; /* Reduce aún más el espacio pegándolo al texto */
+    filter: drop-shadow(0 2px 6px rgba(229, 9, 20, 0.35));
+    margin-top: -1px; /* Centrado vertical milimétrico */
+    margin-right: -2px; /* Reducción de espacio pegado al texto */
 }
 
 .logo-area h1 {
     font-family: var(--font-display);
-    font-size: 1.85rem; /* Proporcional al nuevo tamaño del logo */
+    font-size: 1.6rem; /* Proporcional al nuevo tamaño del logo */
     font-weight: 800;
     letter-spacing: -0.8px;
-    background: var(--accent-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--accent-red); /* Tono sólido igual al logo */
     display: flex;
     align-items: center;
     gap: 5px;
