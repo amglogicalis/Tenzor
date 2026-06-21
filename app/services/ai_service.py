@@ -45,123 +45,119 @@ class AIService:
             role = msg.role if msg.role in ["user", "assistant", "system"] else "user"
             formatted_messages.append({"role": role, "content": msg.content})
 
-        # Intentar primero con Groq (Llama 3.3 70B)
+        # 1. Intentar con la lista de modelos de Groq (en orden de prioridad)
         if self.groq_client:
-            try:
-                logger.info("Intentando generación con Groq (llama-3.3-70b-versatile)...")
-                
-                # Ajuste de parámetros
-                kwargs = {
-                    "model": "llama-3.3-70b-versatile",
-                    "messages": formatted_messages,
-                    "temperature": temperature,
-                }
-                if max_tokens:
-                    kwargs["max_tokens"] = max_tokens
+            groq_models = ["llama-3.3-70b-versatile", "qwen/qwen3.6-27b"]
+            for model_name in groq_models:
+                try:
+                    logger.info(f"Intentando generación con Groq ({model_name})...")
+                    
+                    # Ajuste de parámetros
+                    kwargs = {
+                        "model": model_name,
+                        "messages": formatted_messages,
+                        "temperature": temperature,
+                    }
+                    if max_tokens:
+                        kwargs["max_tokens"] = max_tokens
 
-                response = self.groq_client.chat.completions.create(**kwargs)
-                
-                # Mapear respuesta al estándar OpenAI
-                choices = []
-                for idx, choice in enumerate(response.choices):
-                    choices.append(
-                        ChatCompletionResponseChoice(
-                            index=idx,
-                            message=Message(
-                                role=choice.message.role,
-                                content=choice.message.content
-                            ),
-                            finish_reason=choice.finish_reason
+                    response = self.groq_client.chat.completions.create(**kwargs)
+                    
+                    # Mapear respuesta al estándar OpenAI
+                    choices = []
+                    for idx, choice in enumerate(response.choices):
+                        choices.append(
+                            ChatCompletionResponseChoice(
+                                index=idx,
+                                message=Message(
+                                    role=choice.message.role,
+                                    content=choice.message.content
+                                ),
+                                finish_reason=choice.finish_reason
+                            )
                         )
+                    
+                    usage = ChatCompletionResponseUsage(
+                        prompt_tokens=response.usage.prompt_tokens,
+                        completion_tokens=response.usage.completion_tokens,
+                        total_tokens=response.usage.total_tokens
                     )
-                
-                usage = ChatCompletionResponseUsage(
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens,
-                    total_tokens=response.usage.total_tokens
-                )
 
-                return ChatCompletionResponse(
-                    id=response.id,
-                    created=response.created,
-                    model="tenzor-dev (groq:llama-3.3-70b)",
-                    choices=choices,
-                    usage=usage
-                )
-            except Exception as e:
-                logger.error(f"Error en Groq: {e}. Activando fallback a Gemini...")
+                    return ChatCompletionResponse(
+                        id=response.id,
+                        created=response.created,
+                        model=f"tenzor-dev (groq:{model_name})",
+                        choices=choices,
+                        usage=usage
+                    )
+                except Exception as e:
+                    logger.warning(f"Error en Groq con el modelo {model_name}: {e}. Intentando siguiente fallback...")
 
-        # Fallback a Gemini
+        # 2. Fallback a los modelos de Gemini (en orden de prioridad)
         if self.gemini_enabled:
-            try:
-                logger.info("Ejecutando fallback con Google Gemini (gemini-1.5-flash)...")
-                # Configurar modelo
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                
-                # Convertir mensajes al formato de Gemini
-                # Gemini requiere un formato estructurado de contenidos.
-                # También admite inyección de system instruction al crear el modelo.
-                
-                # Creamos el modelo inyectando el system prompt como instruction
-                model_with_instruction = genai.GenerativeModel(
-                    model_name='gemini-1.5-flash',
-                    system_instruction=SYSTEM_PROMPT
-                )
-                
-                # Convertimos el historial de conversación a la API de Gemini
-                # Gemini no admite system messages dentro del historial si ya se pasaron como system_instruction
-                gemini_contents = []
-                for msg in messages:
-                    # Mapeamos roles a los aceptados por Gemini (user, model)
-                    role = "user" if msg.role == "user" else "model"
-                    gemini_contents.append({
-                        "role": role,
-                        "parts": [msg.content]
-                    })
-                
-                generation_config = genai.types.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_tokens
-                )
-
-                response = model_with_instruction.generate_content(
-                    contents=gemini_contents,
-                    generation_config=generation_config
-                )
-                
-                # Construir respuesta
-                completion_text = response.text
-                
-                # Mock token counts ya que Gemini API tiene un método async/síncrono aparte para contarlos
-                # o podemos estimarlo (4 chars ≈ 1 token)
-                prompt_text = "".join([m.content for m in messages])
-                prompt_tokens = len(prompt_text) // 4
-                completion_tokens = len(completion_text) // 4
-                
-                choices = [
-                    ChatCompletionResponseChoice(
-                        index=0,
-                        message=Message(role="assistant", content=completion_text),
-                        finish_reason="stop"
+            gemini_models = ["gemini-2.5-pro", "gemini-2.5-flash"]
+            for model_name in gemini_models:
+                try:
+                    logger.info(f"Intentando fallback con Google Gemini ({model_name})...")
+                    
+                    # Creamos el modelo inyectando el system prompt como instruction
+                    model_with_instruction = genai.GenerativeModel(
+                        model_name=model_name,
+                        system_instruction=SYSTEM_PROMPT
                     )
-                ]
-                
-                usage = ChatCompletionResponseUsage(
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    total_tokens=prompt_tokens + completion_tokens
-                )
+                    
+                    # Convertimos el historial de conversación a la API de Gemini
+                    gemini_contents = []
+                    for msg in messages:
+                        # Mapeamos roles a los aceptados por Gemini (user, model)
+                        role = "user" if msg.role == "user" else "model"
+                        gemini_contents.append({
+                            "role": role,
+                            "parts": [msg.content]
+                        })
+                    
+                    generation_config = genai.types.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=max_tokens
+                    )
 
-                return ChatCompletionResponse(
-                    id=f"tenzor-gemini-{uuid.uuid4().hex[:8]}",
-                    created=int(time.time()),
-                    model="tenzor-dev (gemini:gemini-1.5-flash)",
-                    choices=choices,
-                    usage=usage
-                )
+                    response = model_with_instruction.generate_content(
+                        contents=gemini_contents,
+                        generation_config=generation_config
+                    )
+                    
+                    completion_text = response.text
+                    
+                    # Estimar uso de tokens
+                    prompt_text = "".join([m.content for m in messages])
+                    prompt_tokens = len(prompt_text) // 4
+                    completion_tokens = len(completion_text) // 4
+                    
+                    choices = [
+                        ChatCompletionResponseChoice(
+                            index=0,
+                            message=Message(role="assistant", content=completion_text),
+                            finish_reason="stop"
+                        )
+                    ]
+                    
+                    usage = ChatCompletionResponseUsage(
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=prompt_tokens + completion_tokens
+                    )
 
-            except Exception as e:
-                logger.error(f"Error crítico en Gemini fallback: {e}")
-                raise RuntimeError("Ambos proveedores de IA (Groq y Gemini) han fallado.")
+                    return ChatCompletionResponse(
+                        id=f"tenzor-gemini-{uuid.uuid4().hex[:8]}",
+                        created=int(time.time()),
+                        model=f"tenzor-dev (gemini:{model_name})",
+                        choices=choices,
+                        usage=usage
+                    )
+
+                except Exception as e:
+                    logger.warning(f"Error en Gemini con el modelo {model_name}: {e}. Intentando siguiente fallback...")
+
+            raise RuntimeError("Ambos proveedores de IA (Groq y Gemini) han fallado para todos los modelos disponibles.")
 
         raise RuntimeError("No hay proveedores de IA configurados correctamente. Verifica tus API keys.")
