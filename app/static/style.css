@@ -93,7 +93,7 @@ body, html {
 .logo-area {
     display: flex;
     align-items: center;
-    gap: 1px; /* Pegado y centrado al texto como solicita el usuario */
+    gap: 0px; /* Reducido al mínimo */
 }
 
 .app-logo {
@@ -103,6 +103,7 @@ body, html {
     border-radius: 8px;
     filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.3));
     margin-top: -1px; /* Ajuste milimétrico de centrado vertical */
+    margin-right: -4px; /* Reduce aún más el espacio pegándolo al texto */
 }
 
 .logo-area h1 {
