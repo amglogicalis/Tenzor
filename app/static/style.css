@@ -1,17 +1,17 @@
 /* 🎨 CSS Reset y Estilos Globales */
 :root {
-    /* Tema Oscuro Rojizo (Por Defecto) */
-    --bg-dark: #0c0708;
-    --bg-sidebar: #120d0f;
-    --bg-chat-area: #080405;
-    --bg-message-user: #1b1114;
-    --bg-message-assistant: #0c0708;
-    --text-primary: #f5f1f2;
-    --text-secondary: #968c90;
-    --accent-red: #ef4444;
-    --accent-dark-red: #991b1b;
-    --accent-gradient: linear-gradient(135deg, #ef4444 0%, #991b1b 100%);
-    --border-color: #241418;
+    /* Tema Oscuro Rojizo (Por Defecto) - Gris muy oscuro rojizo */
+    --bg-dark: #120709;
+    --bg-sidebar: #190b0d;
+    --bg-chat-area: #0f0507;
+    --bg-message-user: #220f12;
+    --bg-message-assistant: #0f0507;
+    --text-primary: #fbeee0;
+    --text-secondary: #ad9a9d;
+    --accent-red: #f43f5e;
+    --accent-dark-red: #9f1239;
+    --accent-gradient: linear-gradient(135deg, #f43f5e 0%, #9f1239 100%);
+    --border-color: #2e1216;
     --border-radius-sm: 8px;
     --border-radius-md: 12px;
     --border-radius-lg: 18px;
@@ -19,16 +19,16 @@
     --font-display: 'Outfit', sans-serif;
 }
 
-/* ⚪ Tema Claro (Blanco) */
+/* ⚪ Tema Claro (Blanco) con sutiles toques rojizos */
 body.light-theme {
-    --bg-dark: #fbfbfc;
-    --bg-sidebar: #f4f3f4;
+    --bg-dark: #fdfcfc;
+    --bg-sidebar: #fcfafb;
     --bg-chat-area: #ffffff;
-    --bg-message-user: #ebe9eb;
-    --bg-message-assistant: #fbfbfc;
-    --text-primary: #120e10;
-    --text-secondary: #5a5457;
-    --border-color: #e5dfe2;
+    --bg-message-user: #faebee;
+    --bg-message-assistant: #ffffff;
+    --text-primary: #1f0f11;
+    --text-secondary: #7d6569;
+    --border-color: #f3e4e7;
 }
 
 * {
@@ -93,15 +93,15 @@ body, html {
 .logo-area {
     display: flex;
     align-items: center;
-    gap: 8px; /* Pegado como solicita el usuario */
+    gap: 4px; /* Pegado al texto como solicita el usuario */
 }
 
 .app-logo {
-    width: 52px; /* Logo más grande */
-    height: 52px;
+    width: 60px; /* Logo más grande */
+    height: 60px;
     object-fit: contain;
     border-radius: 8px;
-    filter: drop-shadow(0 2px 8px rgba(239, 68, 68, 0.3));
+    filter: drop-shadow(0 2px 8px rgba(244, 63, 94, 0.3));
 }
 
 .logo-area h1 {
@@ -346,11 +346,11 @@ body.light-theme .chat-action-btn:hover {
 }
 
 .welcome-logo {
-    width: 132px; /* Aún más grande como solicita el usuario */
-    height: 132px;
+    width: 148px; /* Aún más grande como solicita el usuario */
+    height: 148px;
     object-fit: contain;
     border-radius: 24px;
-    filter: drop-shadow(0 8px 24px rgba(239, 68, 68, 0.45));
+    filter: drop-shadow(0 8px 24px rgba(244, 63, 94, 0.45));
     margin-bottom: 8px;
 }
 
@@ -442,8 +442,8 @@ body.light-theme .chat-action-btn:hover {
 
 /* Código formateado (Markdown) - Mantiene aspecto oscuro premium incluso en tema claro */
 .message-body pre {
-    background-color: #050304 !important;
-    border: 1px solid #1e1114;
+    background-color: #120709 !important;
+    border: 1px solid #2e1216;
     border-radius: var(--border-radius-md);
     margin: 16px 0;
     position: relative;
@@ -454,7 +454,7 @@ body.light-theme .chat-action-btn:hover {
 .message-body code {
     font-family: 'Consolas', 'Courier New', Courier, monospace;
     font-size: 0.85rem;
-    color: #f5f1f2;
+    color: #fbeee0;
 }
 
 /* Cabecera de bloque de código */
@@ -464,8 +464,8 @@ body.light-theme .chat-action-btn:hover {
     left: 0;
     right: 0;
     height: 34px;
-    background-color: #0c0708;
-    border-bottom: 1px solid #1e1114;
+    background-color: #190b0d;
+    border-bottom: 1px solid #2e1216;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -474,7 +474,7 @@ body.light-theme .chat-action-btn:hover {
 
 .code-lang {
     font-size: 0.75rem;
-    color: #968c90;
+    color: #ad9a9d;
     font-weight: 600;
     text-transform: uppercase;
 }
@@ -482,7 +482,7 @@ body.light-theme .chat-action-btn:hover {
 .copy-code-btn {
     background: transparent;
     border: none;
-    color: #968c90;
+    color: #ad9a9d;
     cursor: pointer;
     font-size: 0.75rem;
     display: flex;
@@ -717,7 +717,7 @@ body.light-theme .close-modal-btn:hover {
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3D%22//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23ef4444%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3D%22//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23f43f5e%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
     background-size: 16px;
