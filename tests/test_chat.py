@@ -125,4 +125,18 @@ def test_chat_completions_with_images_success(mock_generate, mock_validate):
     assert mock_generate.called
     assert mock_validate.called
 
+@patch("app.services.key_service.KeyService.validate_key")
+def test_chat_completions_expired_key(mock_validate):
+    """Prueba que el chat rechace una API Key caducada con código 401."""
+    mock_validate.side_effect = ValueError("API Key caducada y eliminada.")
+    payload = {
+        "model": "tenzor-dev",
+        "messages": [{"role": "user", "content": "Hola"}]
+    }
+    headers = {"Authorization": "Bearer clave-expirada"}
+    response = client.post("/v1/chat/completions", json=payload, headers=headers)
+    assert response.status_code == 401
+    assert "caducada" in response.json()["detail"].lower()
+
+
 

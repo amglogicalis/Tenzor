@@ -29,7 +29,8 @@ async def create_key(
     try:
         new_key = key_service.create_api_key(
             owner_name=payload.owner_name,
-            rate_limit=payload.rate_limit
+            rate_limit=payload.rate_limit,
+            expires_in_days=payload.expires_in_days
         )
         return new_key
     except Exception as e:
