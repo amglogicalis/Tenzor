@@ -46,6 +46,23 @@ const welcomeScreen = document.getElementById("welcome-screen");
 document.addEventListener("DOMContentLoaded", async () => {
     // 1. Cargar ajustes guardados en localStorage
     state.userApiKey = localStorage.getItem("tenzor_user_api_key") || "";
+    
+    // Si no hay clave guardada, intentar obtener la clave por defecto del servidor
+    if (!state.userApiKey) {
+        try {
+            const resp = await fetch("/v1/config");
+            if (resp.ok) {
+                const configData = await resp.json();
+                if (configData.default_api_key) {
+                    state.userApiKey = configData.default_api_key;
+                    localStorage.setItem("tenzor_user_api_key", state.userApiKey);
+                }
+            }
+        } catch (err) {
+            console.error("Error al obtener la API Key por defecto del servidor:", err);
+        }
+    }
+    
     settingsApiKeyInput.value = state.userApiKey;
 
     // 2. Cargar tema visual guardado
