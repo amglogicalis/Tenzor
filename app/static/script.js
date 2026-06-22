@@ -6,7 +6,7 @@ let state = {
     theme: "dark",             // Tema actual: "dark" u "light"
     chatIdBeingRenamed: null,  // ID del chat que se está renombrando actualmente
     attachments: [],           // Archivos adjuntos en espera: { name, type, content, isImage }
-    selectedModel: "tenz-1-nova", // Modelo de IA seleccionado actualmente (Nova por defecto)
+    selectedModel: "tenz-1-meteor", // Modelo de IA seleccionado actualmente (Meteor por defecto)
     allowCustomModel: null     // Permiso de la API Key actual para usar el modelo Nova
 };
 
