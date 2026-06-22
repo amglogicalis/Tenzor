@@ -11,8 +11,9 @@ WORKDIR /code
 COPY ./requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
-# Copiar el código del proyecto
+# Copiar el código del proyecto y la documentación RAG
 COPY ./app /code/app
+COPY ./docs_traning /code/docs_traning
 
 # Exponer el puerto por defecto (opcional, informativo)
 EXPOSE 8000
