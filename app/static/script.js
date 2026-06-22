@@ -6,7 +6,8 @@ let state = {
     theme: "dark",             // Tema actual: "dark" u "light"
     chatIdBeingRenamed: null,  // ID del chat que se está renombrando actualmente
     attachments: [],           // Archivos adjuntos en espera: { name, type, content, isImage }
-    selectedModel: "tenz-1-nova" // Modelo de IA seleccionado actualmente (Nova por defecto)
+    selectedModel: "tenz-1-nova", // Modelo de IA seleccionado actualmente (Nova por defecto)
+    allowCustomModel: null     // Permiso de la API Key actual para usar el modelo Nova
 };
 
 
@@ -815,6 +816,7 @@ async function checkGPUStatus() {
         });
         if (response.ok) {
             const data = await response.json();
+            state.allowCustomModel = data.allow_custom_model;
             updateGPUStatus(data.status);
         } else {
             console.error("Error al consultar el estado de la GPU:", response.statusText);
@@ -881,6 +883,14 @@ function updateGPUStatus(status) {
 
 
 function enableChatUI(enabled, disabledPlaceholder = "") {
+    if (state.selectedModel !== "tenz-1-nova") {
+        chatInput.disabled = false;
+        attachBtn.disabled = false;
+        chatInput.placeholder = "Pregúntale a Tenzor sobre código o infraestructura...";
+        updateSendButtonState();
+        return;
+    }
+
     chatInput.disabled = !enabled;
     attachBtn.disabled = !enabled;
     
@@ -930,13 +940,19 @@ async function wakeGPU() {
         return;
     }
 
+    if (state.allowCustomModel === false) {
+        welcomeScreen.style.display = "none";
+        appendMessageMarkup("assistant", "⚠️ **Acceso Denegado:** Tu API Key actual no tiene permisos para encender o utilizar el modelo premium **Tenzor Nova**.\n\nPuedes chatear libremente seleccionando el modelo **Tenzor Meteor** en el desplegable de abajo.");
+        scrollToBottom();
+        return;
+    }
+
     sessionStorage.setItem("gpu_progress_value", "0");
     sessionStorage.setItem("gpu_is_waking", "true");
     
     updateGPUStatus("waking");
     gpuProgressValue = 0;
     startProgressSimulation();
-
 
     try {
         const response = await fetch("/v1/model/wake", {
@@ -950,8 +966,15 @@ async function wakeGPU() {
             startGPUPolling();
         } else {
             const errData = await response.json().catch(() => ({}));
-            alert("Error al encender la GPU: " + (errData.detail || response.statusText));
-            updateGPUStatus("sleep");
+            if (response.status === 403) {
+                welcomeScreen.style.display = "none";
+                appendMessageMarkup("assistant", "⚠️ **Acceso Denegado:** Tu API Key actual no tiene permisos para encender o utilizar el modelo premium **Tenzor Nova**.\n\nPuedes chatear libremente seleccionando el modelo **Tenzor Meteor** en el desplegable de abajo.");
+                scrollToBottom();
+                updateGPUStatus("sleep");
+            } else {
+                alert("Error al encender la GPU: " + (errData.detail || response.statusText));
+                updateGPUStatus("sleep");
+            }
         }
     } catch (e) {
         alert("Error de red al intentar despertar la GPU.");

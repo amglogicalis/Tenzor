@@ -18,7 +18,10 @@ async def get_model_status(
     """
     try:
         current_status = ai_service.get_model_status()
-        return {"status": current_status}
+        return {
+            "status": current_status,
+            "allow_custom_model": key_info.get("allow_custom_model", False)
+        }
     except Exception as e:
         logger.error(f"Error al obtener estado del modelo: {e}")
         raise HTTPException(
