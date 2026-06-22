@@ -228,7 +228,21 @@ class RAGService:
             "mapfre", "avm", "maptech", "subnets", "subnet", "failover", "switchover"
         }
         
-        has_trigger = any(word in trigger_keywords for word in query_words)
+        # Función auxiliar para obtener singular de una palabra
+        def to_singular(w: str) -> str:
+            if len(w) > 3 and w.endswith("s"):
+                if w.endswith("es"):
+                    return w[:-2]
+                return w[:-1]
+            return w
+
+        # Normalizar palabras de la query (original y singular) para comprobar disparadores
+        query_words_normalized = set()
+        for w in query_words:
+            query_words_normalized.add(w)
+            query_words_normalized.add(to_singular(w))
+            
+        has_trigger = any(word in trigger_keywords for word in query_words_normalized)
         if not has_trigger:
             return None
 
@@ -245,20 +259,31 @@ class RAGService:
             
             heading_words = heading_cleaned.split()
             content_words = content_cleaned.split()
+            
+            # Normalizar también palabras del documento para comparación de singular/plural
+            heading_words_norm = [to_singular(w) for w in heading_words] + heading_words
+            content_words_norm = [to_singular(w) for w in content_words] + content_words
 
-            # Calcular coincidencia de términos
-            matches_in_heading = sum(1 for w in query_words_filtered if w in heading_words)
-            matches_in_content = sum(1 for w in query_words_filtered if w in content_words)
+            # Calcular coincidencia de términos usando tanto el término original como el singular
+            matches_in_heading = 0
+            matches_in_content = 0
+            for w in query_words_filtered:
+                w_sing = to_singular(w)
+                if w in heading_words or w_sing in heading_words_norm:
+                    matches_in_heading += 1
+                if w in content_words or w_sing in content_words_norm:
+                    matches_in_content += 1
 
             # Calcular puntuación ponderada
-            # Coincidir palabras en el título tiene 3x peso, pero solo si es un título real del documento
+            # 1. No dividimos por len(query_words_filtered) para evitar penalizar queries largas.
+            # 2. La coincidencia en encabezado real tiene peso 3.0, en default heading tiene 0.2
             heading_multiplier = 0.2 if chunk.is_default_heading else 3.0
-            heading_score = (matches_in_heading / len(query_words_filtered)) * heading_multiplier
-            content_score = (matches_in_content / len(query_words_filtered)) * 1.0
+            heading_score = matches_in_heading * heading_multiplier
+            content_score = matches_in_content * 1.0
             
             score = heading_score + content_score
 
-            # Dar bonus si la frase de búsqueda simplificada aparece literal en el contenido
+            # Dar bonus si la frase de búsqueda simplificada o el término clave aparece de forma exacta y consecutiva
             simplified_query = " ".join(query_words_filtered)
             if len(simplified_query) > 3 and (simplified_query in content_cleaned or simplified_query in heading_cleaned):
                 score += 1.5
