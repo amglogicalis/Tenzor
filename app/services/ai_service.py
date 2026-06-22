@@ -792,17 +792,19 @@ class AIService:
         if config.CUSTOM_MODEL_PROVIDER != "vertexai":
             return
 
-        elapsed_minutes = (time.time() - self.last_activity_time) / 60.0
-        if elapsed_minutes >= config.VERTEX_AUTOSHUTDOWN_MINUTES:
-            logger.info(f"Inactividad detectada ({elapsed_minutes:.1f} minutos). Procediendo a apagar el modelo para ahorrar costes...")
-            try:
-                status = self.get_model_status()
+        try:
+            status = self.get_model_status()
+            if status == "waking":
+                # Mientras se está levantando el modelo, reseteamos el temporizador de actividad
+                # para que no cuente el tiempo de despliegue/descarga como inactividad.
+                self.last_activity_time = time.time()
+                return
+
+            elapsed_minutes = (time.time() - self.last_activity_time) / 60.0
+            if elapsed_minutes >= config.VERTEX_AUTOSHUTDOWN_MINUTES:
                 if status == "active":
-                    logger.info("Apagando modelo por inactividad...")
+                    logger.info(f"Inactividad detectada ({elapsed_minutes:.1f} minutos). Apagando modelo para ahorrar costes...")
                     self.sleep_model()
-                elif status == "waking":
-                    logger.info("Cancelando activación/apagando modelo por inactividad...")
-                    self.sleep_model()
-            except Exception as e:
-                logger.error(f"Error durante el auto-apagado por inactividad: {e}")
+        except Exception as e:
+            logger.error(f"Error durante el auto-apagado por inactividad: {e}")
 
