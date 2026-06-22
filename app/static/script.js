@@ -54,6 +54,12 @@ const closeRenameModalBtn = document.getElementById("close-rename-modal-btn");
 const cancelRenameBtn = document.getElementById("cancel-rename-btn");
 const saveRenameBtn = document.getElementById("save-rename-btn");
 
+// Selector Confirmar Apagado GPU Modal
+const confirmSleepModal = document.getElementById("confirm-sleep-modal");
+const closeConfirmSleepModalBtn = document.getElementById("close-confirm-sleep-modal-btn");
+const cancelSleepBtn = document.getElementById("cancel-sleep-btn");
+const confirmSleepBtn = document.getElementById("confirm-sleep-btn");
+
 const welcomeScreen = document.getElementById("welcome-screen");
 
 // 🚀 Inicialización de la Aplicación
@@ -229,6 +235,15 @@ function setupEventListeners() {
             e.preventDefault();
             saveChatName();
         }
+    });
+
+    // --- Modal de Confirmación de Apagado de GPU ---
+    const closeConfirmSleep = () => confirmSleepModal.classList.remove("open");
+    closeConfirmSleepModalBtn.addEventListener("click", closeConfirmSleep);
+    cancelSleepBtn.addEventListener("click", closeConfirmSleep);
+    confirmSleepBtn.addEventListener("click", async () => {
+        closeConfirmSleep();
+        await executeSleepGPU();
     });
 }
 
@@ -944,13 +959,15 @@ async function wakeGPU() {
     }
 }
 
-async function sleepGPU() {
+function sleepGPU() {
     const apiKey = state.userApiKey;
     if (!apiKey) return;
+    confirmSleepModal.classList.add("open");
+}
 
-    if (!confirm("¿Seguro que quieres apagar la GPU de Tenzor Nova inmediatamente? Esto interrumpirá las conversaciones activas.")) {
-        return;
-    }
+async function executeSleepGPU() {
+    const apiKey = state.userApiKey;
+    if (!apiKey) return;
 
     try {
         const response = await fetch("/v1/model/sleep", {

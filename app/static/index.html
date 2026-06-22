@@ -187,6 +187,27 @@
         </div>
     </div>
 
+    <!-- Confirm Sleep GPU Modal -->
+    <div class="modal-overlay" id="confirm-sleep-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-circle-exclamation" style="color: var(--accent-red); margin-right: 8px;"></i>¿Apagar GPU?</h3>
+                <button class="close-modal-btn" id="close-confirm-sleep-modal-btn">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.95rem; line-height: 1.5; color: var(--text-primary);">
+                    ¿Seguro que quieres apagar la GPU de Tenzor Nova inmediatamente? Esto interrumpirá las conversaciones activas.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-sleep-btn">Cancelar</button>
+                <button class="btn btn-primary" id="confirm-sleep-btn">Apagar GPU</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Marked.js (Markdown Parser) via CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     
