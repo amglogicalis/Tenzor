@@ -770,6 +770,13 @@ function escapeHTML(str) {
 function handleModelSelectionChange() {
     if (state.selectedModel === "tenz-1-nova") {
         gpuStatusContainer.style.display = "block";
+        
+        // Restaurar estado guardado inmediatamente para evitar parpadeos al recargar la página
+        const lastStatus = sessionStorage.getItem("gpu_last_status");
+        if (lastStatus) {
+            updateGPUStatus(lastStatus);
+        }
+        
         startGPUPolling();
     } else {
         gpuStatusContainer.style.display = "none";
@@ -806,6 +813,9 @@ function updateGPUStatus(status) {
     // Resetear clases
     gpuStatusBadge.className = "gpu-status-badge " + status;
     
+    // Guardar el último estado en sessionStorage para evitar parpadeos al recargar la página
+    sessionStorage.setItem("gpu_last_status", status);
+    
     if (status === "active") {
         gpuStatusBadge.textContent = "Activo";
         gpuProgressWrapper.style.display = "none";
@@ -818,6 +828,10 @@ function updateGPUStatus(status) {
             gpuProgressInterval = null;
         }
         
+        // Limpiar sessionStorage
+        sessionStorage.removeItem("gpu_progress_value");
+        sessionStorage.removeItem("gpu_is_waking");
+        
         enableChatUI(true);
     } else if (status === "waking") {
         gpuStatusBadge.textContent = "Activando";
@@ -825,6 +839,7 @@ function updateGPUStatus(status) {
         gpuWakeBtn.style.display = "none";
         gpuSleepBtn.style.display = "none";
         
+        sessionStorage.setItem("gpu_is_waking", "true");
         enableChatUI(false, "Despertando GPU... Por favor, espera a que el modelo se active.");
         
         // Iniciar barra de progreso simulada si no está corriendo
@@ -841,9 +856,14 @@ function updateGPUStatus(status) {
             gpuProgressInterval = null;
         }
         
+        // Limpiar sessionStorage
+        sessionStorage.removeItem("gpu_progress_value");
+        sessionStorage.removeItem("gpu_is_waking");
+        
         enableChatUI(false, "La GPU de Tenzor Nova está apagada. Haz clic en 'Activar' para despertarla.");
     }
 }
+
 
 function enableChatUI(enabled, disabledPlaceholder = "") {
     chatInput.disabled = !enabled;
@@ -861,8 +881,14 @@ function enableChatUI(enabled, disabledPlaceholder = "") {
 function startProgressSimulation() {
     if (gpuProgressInterval) return;
     
+    // Intentar recuperar el progreso guardado en sessionStorage
+    const savedProgress = sessionStorage.getItem("gpu_progress_value");
+    if (savedProgress !== null) {
+        gpuProgressValue = parseInt(savedProgress) || 0;
+    }
+    
     // Si ya hay un progreso previo, lo mantenemos, sino empezamos en 0
-    if (gpuProgressValue <= 0 || gpuProgressValue >= 95) {
+    if (gpuProgressValue <= 0 || gpuProgressValue > 95) {
         gpuProgressValue = 0;
     }
     
@@ -876,9 +902,11 @@ function startProgressSimulation() {
             gpuProgressValue += 1;
             gpuProgressBarFill.style.width = gpuProgressValue + "%";
             gpuProgressText.textContent = `Levantando GPU... ${gpuProgressValue}%`;
+            sessionStorage.setItem("gpu_progress_value", gpuProgressValue);
         }
     }, 2000);
 }
+
 
 async function wakeGPU() {
     const apiKey = state.userApiKey;
@@ -887,9 +915,13 @@ async function wakeGPU() {
         return;
     }
 
+    sessionStorage.setItem("gpu_progress_value", "0");
+    sessionStorage.setItem("gpu_is_waking", "true");
+    
     updateGPUStatus("waking");
     gpuProgressValue = 0;
     startProgressSimulation();
+
 
     try {
         const response = await fetch("/v1/model/wake", {

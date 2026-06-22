@@ -658,7 +658,7 @@ class AIService:
                 if resp.status_code == 200:
                     ops_data = resp.json()
                     for op in ops_data.get("operations", []):
-                        metadata = op.get("metadata", {})
+                        metadata = op.get("metadata") or {}
                         if not op.get("done") and "DeployModel" in metadata.get("@type", ""):
                             # Si hay una operación activa en GCP asociada al endpoint, la registramos en memoria
                             self.current_op_name = op.get("name")
