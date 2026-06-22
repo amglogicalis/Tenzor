@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 import logging
@@ -37,6 +38,10 @@ class AIService:
         self.current_op_name = None
         self.last_activity_time = time.time()
 
+        # Inicializar servicio RAG de documentación
+        from app.services.rag_service import RAGService
+        self.rag_service = RAGService()
+
 
     def generate_chat_completion(
         self, 
@@ -46,6 +51,29 @@ class AIService:
         temperature: float = 0.7, 
         max_tokens: Optional[int] = None
     ) -> ChatCompletionResponse:
+        # Obtener la consulta del usuario más reciente para el RAG
+        user_query = ""
+        for msg in reversed(messages):
+            if msg.role == "user":
+                user_query = msg.content
+                break
+
+        dynamic_system_prompt = SYSTEM_PROMPT
+        if user_query:
+            try:
+                rag_results = self.rag_service.search(user_query)
+                if rag_results:
+                    context_blocks = []
+                    for chunk in rag_results:
+                        context_blocks.append(
+                            f"--- ARCHIVO: {os.path.basename(chunk.source_file)} (Sección: {chunk.heading}) ---\n{chunk.content}"
+                        )
+                    context_str = "\n\n".join(context_blocks)
+                    dynamic_system_prompt = f"{SYSTEM_PROMPT}\n\n[CONTEXTO DE DOCUMENTACIÓN INTERNA DE LA ORGANIZACIÓN]\nUsa la siguiente información de contexto para responder de forma precisa. Prioriza estos datos internos sobre el conocimiento general:\n{context_str}\n"
+                    logger.info(f"RAG: Inyectados {len(rag_results)} chunks de documentación de contexto.")
+            except Exception as rag_err:
+                logger.error(f"Error al realizar búsqueda RAG: {rag_err}")
+
         # Verificar si solicita el modelo personalizado Tenzor Nova
         if model == config.CUSTOM_MODEL_NAME:
             if key_info is not None and not key_info.get("allow_custom_model", False):
@@ -60,7 +88,7 @@ class AIService:
                     if config.CUSTOM_MODEL_API_KEY:
                         headers["Authorization"] = f"Bearer {config.CUSTOM_MODEL_API_KEY}"
                     
-                    api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+                    api_messages = [{"role": "system", "content": dynamic_system_prompt}]
                     for m in messages:
                         api_messages.append({"role": m.role, "content": m.content})
                     
@@ -107,9 +135,7 @@ class AIService:
                             raise RuntimeError(f"Código de respuesta de error del servidor local/externo: {resp.status_code}")
                 except Exception as custom_err:
                     logger.warning(f"Error conectando con el modelo personalizado ({config.CUSTOM_MODEL_NAME}): {custom_err}. Activando FALLBACK automático a la nube...")
-                    # Cae al flujo normal si hay error (Auto-Fallback)
-
-            # 2. Si el proveedor es Gemini Custom (Tuned Model en Google AI Studio)
+                    # Cae al flujo normal si hay error (A            # 2. Si el proveedor es Gemini Custom (Tuned Model en Google AI Studio)
             elif config.CUSTOM_MODEL_PROVIDER == "gemini" and self.gemini_enabled:
                 try:
                     logger.info(f"Intentando llamada a Gemini Tuned Model ({config.CUSTOM_MODEL_BACKING_NAME})...")
@@ -117,12 +143,13 @@ class AIService:
                         messages=messages,
                         model_name=config.CUSTOM_MODEL_BACKING_NAME,
                         temperature=temperature,
-                        max_tokens=max_tokens
+                        max_tokens=max_tokens,
+                        system_prompt=dynamic_system_prompt
                     )
                 except Exception as custom_gemini_err:
                     logger.warning(f"Error en Gemini Tuned Model: {custom_gemini_err}. Activando FALLBACK automático a la nube...")
                     # Cae al flujo normal
-
+ 
             # 3. Si el proveedor es Vertex AI (GCP)
             elif config.CUSTOM_MODEL_PROVIDER == "vertexai":
                 try:
@@ -131,7 +158,8 @@ class AIService:
                         return self._generate_custom_vertex_completion(
                             messages=messages,
                             temperature=temperature,
-                            max_tokens=max_tokens
+                            max_tokens=max_tokens,
+                            system_prompt=dynamic_system_prompt
                         )
                     else:
                         logger.info(f"Intentando llamada a Vertex AI Tuned Model ({config.CUSTOM_MODEL_BACKING_NAME})...")
@@ -139,15 +167,15 @@ class AIService:
                             messages=messages,
                             model_name=config.CUSTOM_MODEL_BACKING_NAME,
                             temperature=temperature,
-                            max_tokens=max_tokens
+                            max_tokens=max_tokens,
+                            system_prompt=dynamic_system_prompt
                         )
                 except Exception as custom_vertex_err:
                     logger.warning(f"Error en Vertex AI Tuned Model: {custom_vertex_err}. Activando FALLBACK automático a la nube...")
-                    # Cae al flujo normal
 
 
         # Preparar mensajes incluyendo el System Prompt
-        formatted_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        formatted_messages = [{"role": "system", "content": dynamic_system_prompt}]
         for msg in messages:
             # Nos aseguramos de mantener roles limpios (user, assistant, system)
             role = msg.role if msg.role in ["user", "assistant", "system"] else "user"
@@ -214,7 +242,8 @@ class AIService:
                         messages=messages,
                         model_name=model_name,
                         temperature=temperature,
-                        max_tokens=max_tokens
+                        max_tokens=max_tokens,
+                        system_prompt=dynamic_system_prompt
                     )
                 except Exception as e:
                     logger.warning(f"Error en Gemini con el modelo {model_name}: {e}. Intentando siguiente fallback...")
@@ -228,12 +257,13 @@ class AIService:
         messages: List[Message], 
         model_name: str,
         temperature: float = 0.7, 
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        system_prompt: str = SYSTEM_PROMPT
     ) -> ChatCompletionResponse:
         # Creamos el modelo inyectando el system prompt como instruction
         model_with_instruction = genai.GenerativeModel(
             model_name=model_name,
-            system_instruction=SYSTEM_PROMPT
+            system_instruction=system_prompt
         )
         
         # Convertimos el historial de conversación a la API de Gemini
@@ -308,7 +338,8 @@ class AIService:
         messages: List[Message],
         model_name: str,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        system_prompt: str = SYSTEM_PROMPT
     ) -> ChatCompletionResponse:
         import os
         import json
@@ -399,7 +430,7 @@ class AIService:
         payload = {
             "contents": gemini_contents,
             "systemInstruction": {
-                "parts": [{"text": SYSTEM_PROMPT}]
+                "parts": [{"text": system_prompt}]
             },
             "generationConfig": {
                 "temperature": temperature
@@ -461,7 +492,8 @@ class AIService:
         self,
         messages: List[Message],
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        system_prompt: str = SYSTEM_PROMPT
     ) -> ChatCompletionResponse:
         import time
         import uuid
@@ -475,7 +507,7 @@ class AIService:
 
         # 3. Formatear prompt en ChatML (Qwen template)
         prompt = ""
-        prompt += f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n"
+        prompt += f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
         for msg in messages:
             role = msg.role if msg.role in ["user", "assistant", "system"] else "user"
             prompt += f"<|im_start|>{role}\n{msg.content}<|im_end|>\n"
