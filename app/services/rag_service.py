@@ -44,21 +44,126 @@ class RAGService:
     def load_documents(self):
         """Busca y carga dinámicamente todos los archivos .md en la carpeta configurada."""
         self.chunks.clear()
-        if not os.path.exists(self.docs_dir):
-            logger.warning(f"La carpeta de documentación RAG '{self.docs_dir}' no existe.")
-            return
+        
+        # Asegurar que el directorio existe
+        os.makedirs(self.docs_dir, exist_ok=True)
 
-        logger.info(f"Escaneando directorio RAG '{self.docs_dir}'...")
+        # Buscar archivos locales .md
+        md_files = []
         for root, _, files in os.walk(self.docs_dir):
             for file in files:
                 if file.endswith(".md"):
-                    file_path = os.path.join(root, file)
-                    try:
-                        self.parse_markdown_file(file_path)
-                    except Exception as e:
-                        logger.error(f"Error parseando el archivo RAG {file_path}: {e}")
+                    md_files.append(os.path.join(root, file))
+
+        # Si no hay archivos locales, intentar descargar de GCS
+        if not md_files:
+            try:
+                self._download_docs_from_gcs()
+                # Re-escanear después de la descarga
+                for root, _, files in os.walk(self.docs_dir):
+                    for file in files:
+                        if file.endswith(".md"):
+                            md_files.append(os.path.join(root, file))
+            except Exception as download_err:
+                logger.error(f"Error descargando documentación de GCS: {download_err}")
+
+        if not md_files:
+            logger.warning(f"La carpeta de documentación RAG '{self.docs_dir}' está vacía y no se pudo descargar de GCS.")
+            return
+
+        logger.info(f"Escaneando directorio RAG '{self.docs_dir}'...")
+        for file_path in md_files:
+            try:
+                self.parse_markdown_file(file_path)
+            except Exception as e:
+                logger.error(f"Error parseando el archivo RAG {file_path}: {e}")
 
         logger.info(f"RAG inicializado correctamente con {len(self.chunks)} secciones cargadas en memoria.")
+
+    def _download_docs_from_gcs(self):
+        """Descarga la documentación de GCS si no existe localmente (por ejemplo, en Render)."""
+        logger.info("Documentación local no encontrada. Intentando descargar desde Google Cloud Storage (GCS)...")
+        
+        # 1. Obtener credenciales GCP
+        creds = None
+        google_creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+        info = None
+        if google_creds_json:
+            try:
+                import json
+                from google.oauth2 import service_account
+                info = json.loads(google_creds_json)
+                creds = service_account.Credentials.from_service_account_info(
+                    info,
+                    scopes=["https://www.googleapis.com/auth/cloud-platform"]
+                )
+                logger.info("Credenciales GCS cargadas desde GOOGLE_CREDENTIALS_JSON.")
+            except Exception as e:
+                logger.error(f"Error cargando GOOGLE_CREDENTIALS_JSON para GCS: {e}")
+        
+        if not creds:
+            # Intentar buscar service_account.json local (útil en dev si se borra docs_traning)
+            sa_paths = [
+                "service_account.json",
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "service_account.json")
+            ]
+            for sa_path in sa_paths:
+                if os.path.exists(sa_path):
+                    try:
+                        from google.oauth2 import service_account
+                        creds = service_account.Credentials.from_service_account_file(
+                            sa_path,
+                            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+                        )
+                        logger.info(f"Credenciales GCS cargadas desde archivo local {sa_path}.")
+                        break
+                    except Exception as e:
+                        logger.error(f"Error cargando credentials de GCS desde {sa_path}: {e}")
+
+        # 2. Conectar y descargar blobs
+        try:
+            from google.cloud import storage
+            if creds:
+                client = storage.Client(credentials=creds, project=info.get("project_id") if info else None)
+            else:
+                client = storage.Client()
+                
+            bucket_name = os.getenv("RAG_BUCKET_NAME", "tenzorai-tuning")
+            prefix = "docs_traning/"
+            bucket = client.bucket(bucket_name)
+            
+            logger.info(f"Listando blobs en gs://{bucket_name}/{prefix}...")
+            blobs = list(client.list_blobs(bucket, prefix=prefix))
+            
+            if not blobs:
+                logger.warning(f"No se encontraron archivos RAG en gs://{bucket_name}/{prefix}.")
+                return
+                
+            download_count = 0
+            for blob in blobs:
+                if blob.name.endswith("/"):
+                    continue
+                
+                # Obtener la ruta del archivo relativo dentro de docs_traning
+                if blob.name.startswith(prefix):
+                    rel_path = blob.name[len(prefix):]
+                else:
+                    rel_path = blob.name
+                
+                # Reemplazar barras para que sea multiplataforma
+                rel_path = rel_path.replace("/", os.sep)
+                local_file_path = os.path.join(self.docs_dir, rel_path)
+                
+                # Asegurar que existe el subdirectorio local
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                
+                logger.info(f"Descargando {blob.name} en {local_file_path}...")
+                blob.download_to_filename(local_file_path)
+                download_count += 1
+                
+            logger.info(f"Descarga de documentación finalizada con éxito. Total descargados: {download_count} archivos.")
+        except Exception as e:
+            logger.error(f"Excepción descargando documentación de GCS: {e}")
 
     def parse_markdown_file(self, file_path: str):
         """Divide un archivo Markdown en chunks pequeños (máx 1800 caracteres) con solapamiento."""
