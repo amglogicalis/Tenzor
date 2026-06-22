@@ -1024,4 +1024,152 @@ body.light-theme .file-attachment-pill {
     font-size: 1rem;
 }
 
+/* ==========================================================================
+   ⚙️ Estilos para el Ciclo de Vida de la GPU (Wake-on-Demand)
+   ========================================================================== */
+.gpu-status-container {
+    max-width: 780px;
+    width: 100%;
+    margin-bottom: 8px;
+    animation: fadeIn 0.3s ease;
+}
+
+.gpu-status-bar {
+    background-color: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    transition: all 0.3s ease;
+}
+
+body.light-theme .gpu-status-bar {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.gpu-status-icon {
+    color: var(--accent-red);
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+}
+
+.gpu-status-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.gpu-status-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.gpu-status-badge.sleep {
+    background-color: rgba(229, 9, 20, 0.15);
+    color: var(--accent-red);
+    border: 1px solid rgba(229, 9, 20, 0.3);
+}
+
+.gpu-status-badge.waking {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+.gpu-status-badge.active {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.gpu-progress-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 8px;
+}
+
+.gpu-progress-bar-bg {
+    width: 100%;
+    height: 6px;
+    background-color: var(--bg-dark);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--border-color);
+}
+
+.gpu-progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent-gradient);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.gpu-progress-text {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-align: right;
+    font-family: monospace;
+}
+
+.gpu-action-btn {
+    padding: 6px 12px;
+    border-radius: var(--border-radius-sm);
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.gpu-action-btn.wake {
+    background: var(--accent-gradient);
+    color: white;
+}
+
+.gpu-action-btn.wake:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.gpu-action-btn.sleep {
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.gpu-action-btn.sleep:hover {
+    background-color: rgba(229, 9, 20, 0.1);
+    color: var(--accent-red);
+    border-color: var(--accent-red);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+
 

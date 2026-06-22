@@ -1,8 +1,9 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import chat, admin
+from app.routers import chat, admin, endpoints
 from app import config
+
 
 app = FastAPI(
     title="Tenzor API",
@@ -32,6 +33,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Registrar Routers
 app.include_router(chat.router)
 app.include_router(admin.router)
+app.include_router(endpoints.router)
+
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -46,5 +49,27 @@ async def root():
     """
     return FileResponse("app/static/index.html")
 
+import asyncio
+import logging
+from app.routers.chat import ai_service
+
+async def auto_shutdown_loop():
+    logger = logging.getLogger("auto_shutdown")
+    logger.info("Bucle de auto-apagado por inactividad iniciado.")
+    while True:
+        try:
+            # Comprobar inactividad cada 60 segundos
+            await asyncio.sleep(60)
+            ai_service.check_idle_shutdown()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Error en bucle de auto-apagado: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(auto_shutdown_loop())
+
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host=config.HOST, port=config.PORT, reload=True)
+

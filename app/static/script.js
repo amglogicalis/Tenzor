@@ -6,8 +6,9 @@ let state = {
     theme: "dark",             // Tema actual: "dark" u "light"
     chatIdBeingRenamed: null,  // ID del chat que se está renombrando actualmente
     attachments: [],           // Archivos adjuntos en espera: { name, type, content, isImage }
-    selectedModel: "tenzor-dev" // Modelo de IA seleccionado actualmente
+    selectedModel: "tenz-1-nova" // Modelo de IA seleccionado actualmente (Nova por defecto)
 };
+
 
 // 🗺️ Selectores DOM
 const sidebar = document.getElementById("sidebar");
@@ -23,6 +24,19 @@ const chatFileInput = document.getElementById("chat-file-input");
 const attachmentPreview = document.getElementById("attachment-preview");
 const chatArea = document.querySelector(".chat-area");
 const modelSelector = document.getElementById("model-selector");
+
+// Selectores GPU Lifecycle
+const gpuStatusContainer = document.getElementById("gpu-status-container");
+const gpuStatusBadge = document.getElementById("gpu-status-badge");
+const gpuProgressWrapper = document.getElementById("gpu-progress-wrapper");
+const gpuProgressBarFill = document.getElementById("gpu-progress-bar-fill");
+const gpuProgressText = document.getElementById("gpu-progress-text");
+const gpuWakeBtn = document.getElementById("gpu-wake-btn");
+const gpuSleepBtn = document.getElementById("gpu-sleep-btn");
+
+let gpuPollingInterval = null;
+let gpuProgressInterval = null;
+let gpuProgressValue = 0;
 
 // Selector Ajustes Modal
 const settingsBtn = document.getElementById("settings-btn");
@@ -66,7 +80,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
         showWelcomeScreen();
     }
+
+    // 6. Inicializar modelo seleccionado y estado GPU
+    state.selectedModel = modelSelector.value;
+    handleModelSelectionChange();
 });
+
 
 
 
@@ -153,7 +172,13 @@ function setupEventListeners() {
     // Cambiar de modelo de IA
     modelSelector.addEventListener("change", (e) => {
         state.selectedModel = e.target.value;
+        handleModelSelectionChange();
     });
+
+    // Ciclo de vida de la GPU (Botones de encendido/apagado)
+    gpuWakeBtn.addEventListener("click", wakeGPU);
+    gpuSleepBtn.addEventListener("click", sleepGPU);
+
 
     // Enviar mensaje al pulsar Enter (sin Shift)
     chatInput.addEventListener("keydown", (e) => {
@@ -737,3 +762,194 @@ function escapeHTML(str) {
         }[tag] || tag)
     );
 }
+
+// ==========================================================================
+// ⚙️ Lógica de Ciclo de Vida de la GPU (Wake-on-Demand)
+// ==========================================================================
+
+function handleModelSelectionChange() {
+    if (state.selectedModel === "tenz-1-nova") {
+        gpuStatusContainer.style.display = "block";
+        startGPUPolling();
+    } else {
+        gpuStatusContainer.style.display = "none";
+        stopGPUPolling();
+        enableChatUI(true);
+    }
+}
+
+async function checkGPUStatus() {
+    const apiKey = state.userApiKey;
+    if (!apiKey) {
+        updateGPUStatus("sleep");
+        return;
+    }
+
+    try {
+        const response = await fetch("/v1/model/status", {
+            headers: {
+                "Authorization": `Bearer ${apiKey}`
+            }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            updateGPUStatus(data.status);
+        } else {
+            console.error("Error al consultar el estado de la GPU:", response.statusText);
+        }
+    } catch (e) {
+        console.error("Error de red al consultar el estado de la GPU:", e);
+    }
+}
+
+function updateGPUStatus(status) {
+    // Resetear clases
+    gpuStatusBadge.className = "gpu-status-badge " + status;
+    
+    if (status === "active") {
+        gpuStatusBadge.textContent = "Activo";
+        gpuProgressWrapper.style.display = "none";
+        gpuWakeBtn.style.display = "none";
+        gpuSleepBtn.style.display = "inline-block";
+        
+        // Detener animación de carga si estaba corriendo
+        if (gpuProgressInterval) {
+            clearInterval(gpuProgressInterval);
+            gpuProgressInterval = null;
+        }
+        
+        enableChatUI(true);
+    } else if (status === "waking") {
+        gpuStatusBadge.textContent = "Activando";
+        gpuProgressWrapper.style.display = "flex";
+        gpuWakeBtn.style.display = "none";
+        gpuSleepBtn.style.display = "none";
+        
+        enableChatUI(false, "Despertando GPU... Por favor, espera a que el modelo se active.");
+        
+        // Iniciar barra de progreso simulada si no está corriendo
+        startProgressSimulation();
+    } else {
+        // "sleep" u otros
+        gpuStatusBadge.textContent = "Reposo";
+        gpuProgressWrapper.style.display = "none";
+        gpuWakeBtn.style.display = "inline-block";
+        gpuSleepBtn.style.display = "none";
+        
+        if (gpuProgressInterval) {
+            clearInterval(gpuProgressInterval);
+            gpuProgressInterval = null;
+        }
+        
+        enableChatUI(false, "La GPU de Tenzor Nova está apagada. Haz clic en 'Activar' para despertarla.");
+    }
+}
+
+function enableChatUI(enabled, disabledPlaceholder = "") {
+    chatInput.disabled = !enabled;
+    attachBtn.disabled = !enabled;
+    
+    if (enabled) {
+        chatInput.placeholder = "Pregúntale a Tenzor sobre código o infraestructura...";
+        updateSendButtonState();
+    } else {
+        chatInput.placeholder = disabledPlaceholder;
+        sendBtn.disabled = true;
+    }
+}
+
+function startProgressSimulation() {
+    if (gpuProgressInterval) return;
+    
+    // Si ya hay un progreso previo, lo mantenemos, sino empezamos en 0
+    if (gpuProgressValue <= 0 || gpuProgressValue >= 95) {
+        gpuProgressValue = 0;
+    }
+    
+    gpuProgressBarFill.style.width = gpuProgressValue + "%";
+    gpuProgressText.textContent = `Activando... ${gpuProgressValue}%`;
+    
+    // Incrementar progreso simulando 3 minutos (180 segundos)
+    // 95% / 180s = ~0.5% cada segundo
+    gpuProgressInterval = setInterval(() => {
+        if (gpuProgressValue < 95) {
+            gpuProgressValue += 1;
+            gpuProgressBarFill.style.width = gpuProgressValue + "%";
+            gpuProgressText.textContent = `Levantando GPU... ${gpuProgressValue}%`;
+        }
+    }, 2000);
+}
+
+async function wakeGPU() {
+    const apiKey = state.userApiKey;
+    if (!apiKey) {
+        alert("Por favor, introduce tu API Key en Ajustes primero.");
+        return;
+    }
+
+    updateGPUStatus("waking");
+    gpuProgressValue = 0;
+    startProgressSimulation();
+
+    try {
+        const response = await fetch("/v1/model/wake", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`
+            }
+        });
+        if (response.ok) {
+            // Comenzar polling de estado rápido mientras despierta
+            startGPUPolling();
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            alert("Error al encender la GPU: " + (errData.detail || response.statusText));
+            updateGPUStatus("sleep");
+        }
+    } catch (e) {
+        alert("Error de red al intentar despertar la GPU.");
+        updateGPUStatus("sleep");
+    }
+}
+
+async function sleepGPU() {
+    const apiKey = state.userApiKey;
+    if (!apiKey) return;
+
+    if (!confirm("¿Seguro que quieres apagar la GPU de Tenzor Nova inmediatamente? Esto interrumpirá las conversaciones activas.")) {
+        return;
+    }
+
+    try {
+        const response = await fetch("/v1/model/sleep", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`
+            }
+        });
+        if (response.ok) {
+            updateGPUStatus("sleep");
+        } else {
+            const errData = await response.json().catch(() => ({}));
+            alert("Error al apagar la GPU: " + (errData.detail || response.statusText));
+        }
+    } catch (e) {
+        alert("Error de red al intentar apagar la GPU.");
+    }
+}
+
+function startGPUPolling() {
+    stopGPUPolling();
+    // Consultar estado inmediatamente
+    checkGPUStatus();
+    // Consultar cada 15 segundos
+    gpuPollingInterval = setInterval(checkGPUStatus, 15000);
+}
+
+function stopGPUPolling() {
+    if (gpuPollingInterval) {
+        clearInterval(gpuPollingInterval);
+        gpuPollingInterval = null;
+    }
+}
+

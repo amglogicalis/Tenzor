@@ -15,4 +15,4 @@ pip-delete-this-directory.txt
 .pytest_cache/
 instrucciones.md
 service_account.json
-service_account.json
+docs_traning/

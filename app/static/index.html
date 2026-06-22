@@ -77,7 +77,26 @@
             <!-- Input Bar -->
             <footer class="chat-footer">
                 <div class="attachment-preview" id="attachment-preview" style="display: none;"></div>
+                
+                <!-- GPU On-Demand Status Indicator and Controls -->
+                <div class="gpu-status-container" id="gpu-status-container" style="display: none;">
+                    <div class="gpu-status-bar">
+                        <span class="gpu-status-icon"><i class="fa-solid fa-microchip"></i></span>
+                        <span class="gpu-status-label">GPU (Tenzor Nova):</span>
+                        <span class="gpu-status-badge sleep" id="gpu-status-badge">Apagado</span>
+                        <div class="gpu-progress-wrapper" id="gpu-progress-wrapper" style="display: none;">
+                            <div class="gpu-progress-bar-bg">
+                                <div class="gpu-progress-bar-fill" id="gpu-progress-bar-fill"></div>
+                            </div>
+                            <span class="gpu-progress-text" id="gpu-progress-text">Activando... 0%</span>
+                        </div>
+                        <button class="gpu-action-btn wake" id="gpu-wake-btn"><i class="fa-solid fa-power-off"></i> Activar</button>
+                        <button class="gpu-action-btn sleep" id="gpu-sleep-btn" style="display: none;"><i class="fa-solid fa-power-off"></i> Apagar</button>
+                    </div>
+                </div>
+
                 <div class="input-container">
+
                     <button class="attach-btn" id="attach-btn" title="Adjuntar archivos o imágenes">
                         <i class="fa-solid fa-paperclip"></i>
                     </button>
@@ -89,8 +108,7 @@
                     <input type="file" id="chat-file-input" multiple accept="image/*,.txt,.log,.py,.js,.json,.sh,.yml,.yaml,.md,.csv" style="display: none;">
                     <div class="model-selector-container">
                         <select id="model-selector" class="model-select" title="Selecciona el modelo de IA">
-                            <option value="tenzor-dev">Tenzor Estándar</option>
-                            <option value="tenz-1-meteor">Tenzor Meteor</option>
+                            <option value="tenz-1-nova">Tenzor Nova</option>
                         </select>
                     </div>
                     <button class="send-btn" id="send-btn" disabled>
