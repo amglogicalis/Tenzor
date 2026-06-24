@@ -507,26 +507,22 @@ class AIService:
         # 2. Registrar actividad para evitar auto-apagado
         self.last_activity_time = time.time()
 
-        # 3. Formatear prompt en ChatML (Qwen template)
-        prompt = ""
-        prompt += f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
+        # 3. Construir payload compatible con el endpoint creado por Model Garden.
+        # El script de despliegue valida este endpoint con instances[].messages,
+        # no con prompt plano en formato ChatML.
+        vertex_messages = [{"role": "system", "content": system_prompt}]
         for msg in messages:
             role = msg.role if msg.role in ["user", "assistant", "system"] else "user"
-            prompt += f"<|im_start|>{role}\n{msg.content}<|im_end|>\n"
-        prompt += "<|im_start|>assistant\n"
+            vertex_messages.append({"role": role, "content": msg.content})
 
-        # 4. Construir payload
         payload = {
             "instances": [
                 {
-                    "prompt": prompt
+                    "messages": vertex_messages,
+                    "max_tokens": max_tokens or 2048,
+                    "temperature": temperature,
                 }
-            ],
-            "parameters": {
-                "temperature": temperature,
-                "max_tokens": max_tokens or 2048,
-                "stop": ["<|im_end|>", "<|im_start|>"]
-            }
+            ]
         }
 
         # 5. Enviar petición POST a :predict en el endpoint
@@ -550,12 +546,20 @@ class AIService:
         if not predictions:
             raise RuntimeError("La respuesta del Endpoint no contiene predicciones.")
         
-        raw_text = predictions[0]
+        raw_prediction = predictions[0]
+        if isinstance(raw_prediction, dict):
+            raw_text = (
+                raw_prediction.get("content")
+                or raw_prediction.get("text")
+                or raw_prediction.get("generated_text")
+                or raw_prediction.get("output")
+                or str(raw_prediction)
+            )
+        else:
+            raw_text = raw_prediction
+
         # Procesar y limpiar respuesta
-        completion_text = raw_text
-        # Si vLLM devuelve el prompt original, lo quitamos
-        if completion_text.startswith(prompt):
-            completion_text = completion_text[len(prompt):]
+        completion_text = str(raw_text)
         
         # Eliminar etiquetas ChatML sobrantes si las hay
         for token in ["<|im_end|>", "<|im_start|>", "<|im_start|>assistant", "<|im_start|>user"]:
@@ -563,7 +567,7 @@ class AIService:
         completion_text = completion_text.strip()
 
         # Estimar uso de tokens
-        prompt_tokens = len(prompt) // 4
+        prompt_tokens = sum(len(m["content"]) for m in vertex_messages) // 4
         completion_tokens = len(completion_text) // 4
         
         choices = [
@@ -643,7 +647,7 @@ class AIService:
             return model_resource
 
         model_resource = f"projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/models/{config.VERTEX_MODEL_ID}"
-        if config.VERTEX_MODEL_VERSION:
+        if config.VERTEX_MODEL_VERSION and not config.VERTEX_MODEL_ID.startswith("mg-"):
             return f"{model_resource}@{config.VERTEX_MODEL_VERSION}"
         return model_resource
 

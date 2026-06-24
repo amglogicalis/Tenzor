@@ -464,6 +464,73 @@ def test_sleep_model_returns_sleeping_while_undeploy_operation_runs():
         ai_service.current_op_error = None
 
 
+def test_model_garden_resource_does_not_append_version():
+    """Los modelos mg-* de Model Garden se despliegan por ID directo, sin sufijo @version."""
+    from app.routers.chat import ai_service
+
+    old_model_resource = config.VERTEX_MODEL_RESOURCE
+    old_model_id = config.VERTEX_MODEL_ID
+    old_model_version = config.VERTEX_MODEL_VERSION
+
+    config.VERTEX_MODEL_RESOURCE = ""
+    config.VERTEX_MODEL_ID = "mg-custom-1782292431"
+    config.VERTEX_MODEL_VERSION = "1"
+
+    try:
+        assert ai_service._vertex_model_resource() == "projects/tenzorai/locations/us-central1/models/mg-custom-1782292431"
+    finally:
+        config.VERTEX_MODEL_RESOURCE = old_model_resource
+        config.VERTEX_MODEL_ID = old_model_id
+        config.VERTEX_MODEL_VERSION = old_model_version
+
+
+@patch("google.oauth2.service_account.Credentials.from_service_account_file")
+@patch("google.auth.transport.requests.Request")
+def test_custom_vertex_endpoint_uses_model_garden_messages_payload(mock_request, mock_from_file):
+    """La inferencia contra el endpoint mg-* debe usar instances[].messages como el script de deploy."""
+    from app.routers.chat import ai_service
+    import httpx
+
+    class MockCreds:
+        token = "mock-gcp-token"
+        def refresh(self, request):
+            pass
+    mock_from_file.return_value = MockCreds()
+
+    post_payloads = []
+
+    def mock_post_fn(self, url, *args, **kwargs):
+        post_payloads.append(kwargs.get("json"))
+        class MockResponse:
+            status_code = 200
+            def json(self):
+                return {"predictions": [{"content": "Respuesta desde Model Garden."}]}
+        return MockResponse()
+
+    old_backing = config.CUSTOM_MODEL_BACKING_NAME
+    config.CUSTOM_MODEL_BACKING_NAME = "projects/tenzorai/locations/us-central1/endpoints/mg-endpoint-1eae4fb8-4883-4bfc-8355-08cdb1ee1bb9"
+
+    try:
+        with patch("httpx.Client.post", new=mock_post_fn):
+            result = ai_service._generate_custom_vertex_completion(
+                messages=[Message(role="user", content="Hola")],
+                system_prompt="Sistema",
+                max_tokens=128,
+                temperature=0.2,
+            )
+
+        assert result.choices[0].message.content == "Respuesta desde Model Garden."
+        payload = post_payloads[0]
+        assert "prompt" not in payload["instances"][0]
+        assert payload["instances"][0]["max_tokens"] == 128
+        assert payload["instances"][0]["temperature"] == 0.2
+        assert payload["instances"][0]["messages"] == [
+            {"role": "system", "content": "Sistema"},
+            {"role": "user", "content": "Hola"},
+        ]
+    finally:
+        config.CUSTOM_MODEL_BACKING_NAME = old_backing
+
 
 
 
