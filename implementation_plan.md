@@ -1,41 +1,40 @@
-# Plan de Implementación: Tenzor AI Platform
+# Plan de Implementación: Arzor AIs Platform
 
-Este plan detalla la evolución de **Tenzor** para albergar una subplataforma llamada **Tenzor AI Platform** (o **Tenzor Multi AIs Platform**), un entorno donde cualquier usuario puede registrarse con usuario/contraseña, especializar una IA con instrucciones y documentos propios (PDFs, TXT, MD), compartirla en una biblioteca pública y organizar debates colaborativos (**Tenzor Round Table**) sin costes de infraestructura centralizada.
+Este plan detalla la evolución de **Tenzor** para albergar una subplataforma llamada **Arzor AIs Platform** (nombre que combina Arthur y Tenzor por el concepto central de la **Arzor Round Table**). Es un entorno donde cualquier usuario puede registrarse con usuario/contraseña, especializar una IA con instrucciones y documentos propios (PDFs, TXT, MD), compartirla en una biblioteca pública y organizar debates colaborativos (**Arzor Round Table**) protegidos contra fallos de API y saturación de cuotas.
 
 ---
 
 ## 💡 Concepto de Especialización Híbrida y Serverless
 
-Para dar soporte a múltiples usuarios sin consumir tus créditos de Google Cloud en GPUs encendidas 24/7 y evitar bloqueos por rate-limit (429), utilizaremos:
+Para dar soporte a múltiples usuarios sin consumir tus créditos de Google Cloud y evitar bloqueos por rate-limit (429), utilizaremos:
 
-1. **Arquitectura BYOK (Bring Your Own Key) Descentralizada**:
-   - Los usuarios guardan de forma segura sus propias API Keys de Gemini y Groq desde el modal de Ajustes en el frontend (almacenadas en `localStorage` por privacidad).
-   - Estas llaves se envían de forma dinámica en las cabeceras de cada petición al backend.
-   - Toda la inferencia pesada (chats de agentes, debates de mesas redondas y emulaciones de tuning) se consume directamente contra las cuotas individuales de cada usuario, evitando costes y centralización de rate-limits en tu servidor.
+1. **Matriz de Fallback Multi-Proveedor (Google, Groq y OpenRouter)**:
+   - Agregamos **OpenRouter** como tercer proveedor principal de modelos.
+   - Al crear un agente, el sistema asocia modelos de los **3 proveedores** clasificados según la necesidad del usuario:
+     * **Inteligencia General (Pro)**: `gemini-2.5-pro` (Google), `llama-3.3-70b-instruct` (Groq), `qwen/qwen-2.5-72b-instruct` (OpenRouter).
+     * **Equilibrio (Balanced)**: `gemini-2.5-flash` (Google), `qwen3.6-27b` (Groq), `microsoft/phi-4` o `qwen/qwen-2.5-32b-instruct` (OpenRouter).
+     * **Velocidad/Eficiencia (Fast)**: `gemini-2.5-flash-lite` (Google), `llama-3.2-3b-preview` (Groq), `google/gemma-2-9b-it:free` (OpenRouter).
+   - El usuario selecciona un modelo principal según su preferencia (Rapidez/Eficiencia/Equilibrio). Si al interactuar con el agente este falla o da error, el sistema conmuta automáticamente de forma transparente a los otros dos modelos de respaldo (configurados con el mismo RAG y Pseudo-LoRA).
 
-2. **Adaptive Instruction Compilation (Motor de Emulated Fine-Tuning de Alta Capacidad)**:
-   - **Programa Potente, Optimizado y Capaz**: El motor de síntesis de personalidad de cada agente debe ser sumamente robusto y estar bien optimizado. Estará basado en `gemini-2.5-pro` (o modelo avanzado equivalente en modo de salida estructurada JSON).
-   - **Destilación de Directrices y Matriz Sintética**: A partir de la descripción informal del usuario, este programa destila de forma rápida y capaz las directrices maestras (`system_instructions`) y compila una matriz de pesos sintéticos (`pseudo_lora_weights` JSONB) con 10-15 ejemplos de interacción de pocas pasadas (*few-shot Q&A*) de altísima calidad y coherencia lógica.
-   - **Esquema de Validación Estricta**: Se implementarán validadores semánticos y de esquema (Pydantic / Structured Outputs). Si el JSON resultante está incompleto, mal estructurado o carece de la profundidad técnica requerida, el backend realizará reintentos automáticos (máximo 3) ajustando la temperatura para asegurar un resultado potente y funcional que aporte valor real al comportamiento del agente.
-   - **Optimización de Parsing**: Evitaremos overheads innecesarios utilizando parsers de JSON ultrarrápidos y cargando el contexto compilado en caché de memoria para peticiones subsiguientes.
+2. **El Cerebro Núcleo / Vigilante de Sesión (Orquestador Asíncrono)**:
+   - Se implementará un servicio de monitorización y orquestación inteligente para cada sesión de usuario.
+   - **Clasificación Automática**: Al crear una especialización, el Vigilante hace una consulta rápida a un modelo ligero y económico (`gemini-2.5-flash-lite`) para que clasifique la especialidad y asigne de forma óptima los mejores modelos base por provider.
+   - **Prevención de Colisión de API Keys**: Controla que en debates de la **Arzor Round Table**, los diferentes agentes activos no hagan llamadas utilizando la misma API key exactamente al mismo milisegundo (distribuye y desfasa los tiempos de llamada).
+   - **Gestión de Errores e Hilos**: Captura activamente los errores 429 y conmuta los modelos en la matriz de fallback.
 
-3. **Database-backed RAG (Subida de Archivos)**:
-   - El usuario sube PDFs o archivos de texto plano desde la interfaz.
-   - El backend extrae el texto, lo divide en fragmentos y los inserta en Supabase (`agent_knowledge`).
-   - Usamos la búsqueda de texto nativa de Postgres (`@@ to_tsquery`) para recuperar los fragmentos relevantes.
+3. **Pool Rotativo de API Keys Descentralizado por Proveedor**:
+   - Cada usuario (y el sistema de forma global) puede configurar una lista o pool de API Keys para cada proveedor (Google, Groq, OpenRouter).
+   - El backend balanceará el uso de claves para evitar bloqueos por IP y límites de RPM de los proveedores.
 
-4. **Enrutamiento Dinámico de Modelos**:
-   - **Generales / Ocio**: `gemini-2.5-flash-lite` (gratuito, límites de cuota amplios).
-   - **Lógica / Programación / Rol Técnico**: `llama-3.3-70b-instruct` o `gemini-2.5-pro`.
+4. **Adaptive Instruction Compilation (Motor de Emulated Fine-Tuning)**:
+   - Basado en `gemini-2.5-pro`, analiza la descripción informal del usuario y destila las directrices maestras (`system_instructions`) y una matriz de pesos sintéticos (`pseudo_lora_weights` JSONB) con 10-15 ejemplos de interacción de pocas pasadas (*few-shot Q&A*) de alta calidad.
 
-5. **Resiliencia ante Errores 429 (Control Inteligente de Límites de API)**:
-   - **Aislamiento por Clave (Multi-User Isolation)**: Dado que las API Keys de los usuarios son individuales, el backend aísla los límites por usuario. Si el usuario A satura su cuota y recibe un error 429, solo se pausarán sus peticiones individuales, manteniendo el servicio 100% disponible para el resto de usuarios en la plataforma.
-   - **Detección Activa de 429 y Cálculo de Cooldown**: El backend interceptará los errores 429 de las APIs de Groq y Gemini. Extraerá el tiempo de espera de la cabecera `Retry-After` de la respuesta, o en su defecto aplicará un retroceso exponencial dinámico (comenzando en 30 segundos, duplicándose en fallos consecutivos).
-   - **Pausa Elegante y Asíncrona**: En lugar de hacer fallar la sesión de chat o colgar el hilo del backend, el servidor detendrá de forma no bloqueante la ejecución mediante `asyncio.sleep` y devolverá un código de estado intermedio controlado al frontend.
-   - **Visual Cooldown Grace Period (UI/UX Sci-Fi)**: Al recibir el evento de cooldown, el frontend deshabilitará el cuadro de texto del chat y mostrará una interfaz visual animada con temática sci-fi (por ejemplo, "Enfriamiento del Núcleo Cuántico en progreso...") con un temporizador dinámico. El chat se desbloqueará automáticamente al terminar el periodo, previniendo el spam del usuario que empeoraría el rate-limit.
-   - **Cola de Inferencia Asíncrona con Prioridades (`asyncio.Queue`)**: Organiza de manera secuencial y ordenada las peticiones de debates en Mesas Redondas o chats grupales, evitando ráfagas y picos de tráfico simultáneos sobre un mismo token de usuario.
-   - **Compresión Dinámica de Contexto**: En debates multigente, solo pasamos la pregunta base del usuario y los dos últimos turnos de conversación de forma deslizable para minimizar el consumo de tokens y maximizar la velocidad.
-   - **Graceful Fallbacks de Clave**: Si el usuario configura múltiples API keys de fallback, o si el sistema detecta que el modelo premium está en cooldown prolongado, se le ofrecerá al usuario degradar temporalmente de forma elegante al modelo `gemini-2.5-flash-lite` con un aviso informativo.
+5. **Database-backed RAG (Subida de Archivos)**:
+   - El usuario sube PDFs o archivos de texto plano. El backend extrae el texto, lo fragmenta y lo inserta en Supabase (`agent_knowledge`), recuperando contexto mediante búsqueda nativa rápida en Postgres.
+
+6. **Navegación e Integración Dual Protegida**:
+   - Arzor AIs Platform será accesible mediante enlace desde Tenzor AI y viceversa.
+   - Para entrar a **Tenzor AI** (el chat individual privado original), se requerirá obligatoriamente tu API Key maestra del admin, garantizando la seguridad del portal personal.
 
 ---
 
@@ -145,7 +144,7 @@ Para evitar la saturación de código y garantizar la máxima calidad, el proyec
 * **Verificación**:
   - Test de stress: Forzar llamadas consecutivas rápidas simulando error 429 en una clave, y verificar que el backend devuelve un evento de cooldown estructurado (`status: "cooldown"`, `retry_after: N`) sin romper el contexto del chat.
 
-### 📍 Fase 5: Tenzor Round Table (Debates de Agentes)
+### 📍 Fase 5: Arzor Round Table (Debates de Agentes)
 * **Objetivo**: Diseñar la lógica de orquestación de discusiones grupales.
 * **Componentes**:
   - `app/routers/round_table.py` [NEW]
@@ -169,7 +168,7 @@ Para evitar la saturación de código y garantizar la máxima calidad, el proyec
 * **Verificación**:
   - Ejecutar múltiples usuarios simultáneos, bloquear a uno por límite de cuota (429 simulado) y certificar que la interfaz de dicho usuario entra en pausa visual elegante mientras que el resto de usuarios chatea normalmente.
 
-### 📍 Fase 8: Tenzor DevCrew CLI (Desarrollo Local Autónomo) [Fase 2 del Proyecto]
+### 📍 Fase 8: Arzor DevCrew CLI (Desarrollo Local Autónomo) [Fase 2 del Proyecto]
 * **Objetivo**: Desarrollar la herramienta de terminal para la creación física de proyectos locales guiada por debates multi-agente en el servidor, con control estricto de cuotas para evitar errores 429.
 * **Componentes**:
   - `cli/tenzor_crew.py` [NEW]: Cliente CLI local en Python.
