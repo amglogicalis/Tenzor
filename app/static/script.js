@@ -89,6 +89,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // 6. Inicializar modelo seleccionado y estado GPU
+    const savedModel = localStorage.getItem("tenzor_selected_model");
+    if (savedModel && Array.from(modelSelector.options).some(option => option.value === savedModel)) {
+        modelSelector.value = savedModel;
+    }
     state.selectedModel = modelSelector.value;
     handleModelSelectionChange();
 });
@@ -179,6 +183,7 @@ function setupEventListeners() {
     // Cambiar de modelo de IA
     modelSelector.addEventListener("change", (e) => {
         state.selectedModel = e.target.value;
+        localStorage.setItem("tenzor_selected_model", state.selectedModel);
         handleModelSelectionChange();
     });
 
@@ -861,6 +866,32 @@ function updateGPUStatus(status) {
         
         // Iniciar barra de progreso simulada si no está corriendo
         startProgressSimulation();
+    } else if (status === "sleeping") {
+        gpuStatusBadge.textContent = "Apagando";
+        gpuProgressWrapper.style.display = "none";
+        gpuWakeBtn.style.display = "none";
+        gpuSleepBtn.style.display = "none";
+
+        if (gpuProgressInterval) {
+            clearInterval(gpuProgressInterval);
+            gpuProgressInterval = null;
+        }
+
+        enableChatUI(false, "Apagando GPU... Espera unos segundos antes de volver a activarla.");
+    } else if (status === "error") {
+        gpuStatusBadge.textContent = "Error";
+        gpuProgressWrapper.style.display = "none";
+        gpuWakeBtn.style.display = "inline-block";
+        gpuSleepBtn.style.display = "none";
+
+        if (gpuProgressInterval) {
+            clearInterval(gpuProgressInterval);
+            gpuProgressInterval = null;
+        }
+
+        sessionStorage.removeItem("gpu_progress_value");
+        sessionStorage.removeItem("gpu_is_waking");
+        enableChatUI(false, "No se pudo consultar o activar Tenzor Nova. Revisa el estado del endpoint.");
     } else {
         // "sleep" u otros
         gpuStatusBadge.textContent = "Reposo";
@@ -962,6 +993,10 @@ async function wakeGPU() {
             }
         });
         if (response.ok) {
+            const data = await response.json().catch(() => ({}));
+            if (data.status) {
+                updateGPUStatus(data.status);
+            }
             // Comenzar polling de estado rápido mientras despierta
             startGPUPolling();
         } else {
@@ -973,12 +1008,12 @@ async function wakeGPU() {
                 updateGPUStatus("sleep");
             } else {
                 alert("Error al encender la GPU: " + (errData.detail || response.statusText));
-                updateGPUStatus("sleep");
+                updateGPUStatus("error");
             }
         }
     } catch (e) {
         alert("Error de red al intentar despertar la GPU.");
-        updateGPUStatus("sleep");
+        updateGPUStatus("error");
     }
 }
 
@@ -1000,7 +1035,9 @@ async function executeSleepGPU() {
             }
         });
         if (response.ok) {
-            updateGPUStatus("sleep");
+            const data = await response.json().catch(() => ({}));
+            updateGPUStatus(data.status || "sleeping");
+            startGPUPolling();
         } else {
             const errData = await response.json().catch(() => ({}));
             alert("Error al apagar la GPU: " + (errData.detail || response.statusText));
@@ -1024,4 +1061,3 @@ function stopGPUPolling() {
         gpuPollingInterval = null;
     }
 }
-

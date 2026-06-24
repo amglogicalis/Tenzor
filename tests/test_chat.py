@@ -373,6 +373,96 @@ def test_chat_completions_custom_vertex_success(mock_request, mock_from_file, mo
         config.CUSTOM_MODEL_BACKING_NAME = old_backing
 
 
+def test_wake_model_uses_configurable_vertex_resources():
+    """Prueba que Wake-on-Demand use los recursos Vertex configurables, no IDs hardcodeados."""
+    from app.routers.chat import ai_service
+    import httpx
+
+    old_endpoint_resource = config.VERTEX_ENDPOINT_RESOURCE
+    old_model_resource = config.VERTEX_MODEL_RESOURCE
+    old_display = config.VERTEX_DEPLOYED_MODEL_DISPLAY_NAME
+    old_machine = config.VERTEX_MACHINE_TYPE
+    old_accel_type = config.VERTEX_ACCELERATOR_TYPE
+    old_accel_count = config.VERTEX_ACCELERATOR_COUNT
+
+    config.VERTEX_ENDPOINT_RESOURCE = "projects/p/locations/us-central1/endpoints/e-custom"
+    config.VERTEX_MODEL_RESOURCE = "projects/p/locations/us-central1/models/m-custom@7"
+    config.VERTEX_DEPLOYED_MODEL_DISPLAY_NAME = "nova-custom"
+    config.VERTEX_MACHINE_TYPE = "g2-standard-24"
+    config.VERTEX_ACCELERATOR_TYPE = "NVIDIA_L4"
+    config.VERTEX_ACCELERATOR_COUNT = 2
+
+    post_calls = []
+
+    def mock_post_fn(self, url, *args, **kwargs):
+        post_calls.append((url, kwargs.get("json")))
+        class MockResponse:
+            status_code = 200
+            def json(self):
+                return {"name": "operations/deploy-123"}
+        return MockResponse()
+
+    try:
+        with patch.object(ai_service, "get_model_status", return_value="sleep"), \
+             patch.object(ai_service, "_vertex_headers", return_value={"Authorization": "Bearer test"}), \
+             patch("httpx.Client.post", new=mock_post_fn):
+            result = ai_service.wake_model()
+
+        assert result["status"] == "waking"
+        assert post_calls
+        url, payload = post_calls[0]
+        assert "endpoints/e-custom:deployModel" in url
+        assert payload["deployedModel"]["model"] == "projects/p/locations/us-central1/models/m-custom@7"
+        assert payload["deployedModel"]["displayName"] == "nova-custom"
+        assert payload["deployedModel"]["dedicatedResources"]["machineSpec"]["machineType"] == "g2-standard-24"
+        assert payload["deployedModel"]["dedicatedResources"]["machineSpec"]["acceleratorType"] == "NVIDIA_L4"
+        assert payload["deployedModel"]["dedicatedResources"]["machineSpec"]["acceleratorCount"] == 2
+    finally:
+        config.VERTEX_ENDPOINT_RESOURCE = old_endpoint_resource
+        config.VERTEX_MODEL_RESOURCE = old_model_resource
+        config.VERTEX_DEPLOYED_MODEL_DISPLAY_NAME = old_display
+        config.VERTEX_MACHINE_TYPE = old_machine
+        config.VERTEX_ACCELERATOR_TYPE = old_accel_type
+        config.VERTEX_ACCELERATOR_COUNT = old_accel_count
+
+
+def test_sleep_model_returns_sleeping_while_undeploy_operation_runs():
+    """Prueba que Sleep-on-Demand exponga estado intermedio de apagado."""
+    from app.routers.chat import ai_service
+    import httpx
+
+    old_endpoint_resource = config.VERTEX_ENDPOINT_RESOURCE
+    config.VERTEX_ENDPOINT_RESOURCE = "projects/p/locations/us-central1/endpoints/e-custom"
+
+    def mock_get_fn(self, url, *args, **kwargs):
+        class MockResponse:
+            status_code = 200
+            def json(self):
+                return {"deployedModels": [{"id": "deployed-1"}]}
+        return MockResponse()
+
+    def mock_post_fn(self, url, *args, **kwargs):
+        class MockResponse:
+            status_code = 200
+            def json(self):
+                return {"name": "operations/undeploy-123"}
+        return MockResponse()
+
+    try:
+        with patch.object(ai_service, "_vertex_headers", return_value={"Authorization": "Bearer test"}), \
+             patch("httpx.Client.get", new=mock_get_fn), \
+             patch("httpx.Client.post", new=mock_post_fn):
+            result = ai_service.sleep_model()
+
+        assert result["status"] == "sleeping"
+        assert result["operation"] == "operations/undeploy-123"
+        assert ai_service.current_op_kind == "undeploy"
+    finally:
+        config.VERTEX_ENDPOINT_RESOURCE = old_endpoint_resource
+        ai_service.current_op_name = None
+        ai_service.current_op_kind = None
+        ai_service.current_op_error = None
+
 
 
 

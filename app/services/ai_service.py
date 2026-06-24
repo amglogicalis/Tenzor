@@ -3,7 +3,7 @@ import time
 import uuid
 import logging
 import base64
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from groq import Groq
 import google.generativeai as genai
 from app.models import Message, ChatCompletionResponse, ChatCompletionResponseChoice, ChatCompletionResponseUsage
@@ -36,6 +36,8 @@ class AIService:
 
         # Estado en memoria para despliegue On-Demand de Vertex AI
         self.current_op_name = None
+        self.current_op_kind = None
+        self.current_op_error = None
         self.last_activity_time = time.time()
 
         # Inicializar servicio RAG de documentación
@@ -627,193 +629,247 @@ class AIService:
         creds.refresh(auth_req)
         return creds.token
 
-    def get_model_status(self) -> str:
-        """
-        Retorna el estado del endpoint:
-        - "sleep": Si no hay ningún modelo desplegado y no hay operación de despliegue activa.
-        - "waking": Si se está ejecutando la operación de despliegue.
-        - "active": Si el modelo está desplegado y listo para recibir peticiones.
-        """
-        import httpx
-        try:
-            token = self._get_vertex_token()
-        except Exception as e:
-            logger.error(f"Error obteniendo token para el estado: {e}")
-            return "sleep"
+    def _vertex_api_url(self, resource_name: str, suffix: str = "") -> str:
+        return f"https://{config.VERTEX_LOCATION}-aiplatform.googleapis.com/v1/{resource_name}{suffix}"
 
-        headers = {
-            "Authorization": f"Bearer {token}",
+    def _vertex_endpoint_resource(self) -> str:
+        if getattr(config, "VERTEX_ENDPOINT_RESOURCE", ""):
+            return config.VERTEX_ENDPOINT_RESOURCE
+        return f"projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/endpoints/{config.VERTEX_ENDPOINT_ID}"
+
+    def _vertex_model_resource(self) -> str:
+        model_resource = getattr(config, "VERTEX_MODEL_RESOURCE", "")
+        if model_resource:
+            return model_resource
+
+        model_resource = f"projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/models/{config.VERTEX_MODEL_ID}"
+        if config.VERTEX_MODEL_VERSION:
+            return f"{model_resource}@{config.VERTEX_MODEL_VERSION}"
+        return model_resource
+
+    def _vertex_headers(self) -> Dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self._get_vertex_token()}",
             "Content-Type": "application/json"
         }
 
-        endpoint_url = f"https://{config.VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/endpoints/{config.VERTEX_ENDPOINT_ID}"
-        
-        try:
-            with httpx.Client(timeout=10.0) as client:
-                resp = client.get(endpoint_url, headers=headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    deployed_models = data.get("deployedModels", [])
-                    if deployed_models:
-                        self.current_op_name = None
-                        return "active"
-                else:
-                    logger.error(f"Error consultando endpoint en Vertex AI ({resp.status_code}): {resp.text}")
-        except Exception as e:
-            logger.error(f"Excepción consultando endpoint: {e}")
+    def _operation_matches_model_lifecycle(self, op: Dict[str, Any]) -> bool:
+        metadata = op.get("metadata") or {}
+        metadata_text = str(metadata)
+        op_type = metadata.get("@type", "")
+        endpoint_resource = self._vertex_endpoint_resource()
+        model_resource = self._vertex_model_resource().split("@", 1)[0]
 
-        # Comprobar operación activa en memoria
+        is_lifecycle_operation = any(name in op_type for name in ("DeployModel", "UndeployModel"))
+        mentions_target = endpoint_resource in metadata_text or model_resource in metadata_text
+        return is_lifecycle_operation and mentions_target
+
+    def _operation_lifecycle_kind(self, op: Dict[str, Any]) -> Optional[str]:
+        op_type = (op.get("metadata") or {}).get("@type", "")
+        if "UndeployModel" in op_type:
+            return "undeploy"
+        if "DeployModel" in op_type:
+            return "deploy"
+        return None
+
+    def _get_endpoint_deployed_models(self, headers: Dict[str, str]) -> Optional[List[Dict[str, Any]]]:
+        import httpx
+
+        endpoint_url = self._vertex_api_url(self._vertex_endpoint_resource())
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(endpoint_url, headers=headers)
+            if resp.status_code != 200:
+                logger.error(f"Error consultando endpoint en Vertex AI ({resp.status_code}): {resp.text}")
+                return None
+            data = resp.json()
+            return data.get("deployedModels", [])
+
+    def get_model_status(self) -> str:
+        import httpx
+
+        try:
+            headers = self._vertex_headers()
+        except Exception as e:
+            logger.error(f"Error obteniendo token para el estado: {e}")
+            self.current_op_error = f"Error de autenticacion GCP: {e}"
+            return "error"
+
+        try:
+            deployed_models = self._get_endpoint_deployed_models(headers)
+            if deployed_models:
+                self.current_op_name = None
+                self.current_op_kind = None
+                self.current_op_error = None
+                return "active"
+        except Exception as e:
+            logger.error(f"Excepcion consultando endpoint: {e}")
+
         if self.current_op_name:
-            op_url = f"https://{config.VERTEX_LOCATION}-aiplatform.googleapis.com/v1/{self.current_op_name}"
+            op_url = self._vertex_api_url(self.current_op_name)
             try:
                 with httpx.Client(timeout=10.0) as client:
                     resp = client.get(op_url, headers=headers)
                     if resp.status_code == 200:
                         op_data = resp.json()
-                        if op_data.get("done"):
-                            if "error" in op_data:
-                                logger.error(f"La operación de despliegue falló con error: {op_data['error']}")
-                            self.current_op_name = None
-                            return "sleep"
-                        else:
-                            return "waking"
-                    else:
-                        logger.error(f"Error consultando operación ({resp.status_code}): {resp.text}")
-            except Exception as e:
-                logger.error(f"Excepción consultando operación de despliegue: {e}")
+                        if not op_data.get("done"):
+                            return "sleeping" if self.current_op_kind == "undeploy" else "waking"
 
-        # Comprobar si hay operaciones de deploy en GCP
+                        finished_kind = self.current_op_kind
+                        self.current_op_name = None
+                        self.current_op_kind = None
+                        if "error" in op_data:
+                            self.current_op_error = str(op_data["error"])
+                            logger.error(f"La operacion de lifecycle Vertex fallo: {self.current_op_error}")
+                            return "error"
+
+                        deployed_models = self._get_endpoint_deployed_models(headers)
+                        if deployed_models:
+                            self.current_op_error = None
+                            return "active"
+
+                        if finished_kind == "undeploy":
+                            self.current_op_error = None
+                            return "sleep"
+
+                        # La LRO puede finalizar unos segundos antes de que el endpoint refleje deployedModels.
+                        return "waking"
+                    logger.error(f"Error consultando operacion ({resp.status_code}): {resp.text}")
+            except Exception as e:
+                logger.error(f"Excepcion consultando operacion de lifecycle: {e}")
+
         try:
-            list_ops_url = f"https://{config.VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/operations"
+            list_ops_url = self._vertex_api_url(
+                f"projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/operations"
+            )
             with httpx.Client(timeout=10.0) as client:
                 resp = client.get(list_ops_url, headers=headers)
                 if resp.status_code == 200:
                     ops_data = resp.json()
                     for op in ops_data.get("operations", []):
-                        metadata = op.get("metadata") or {}
-                        if not op.get("done") and "DeployModel" in metadata.get("@type", ""):
-                            # Si hay una operación activa en GCP asociada al endpoint, la registramos en memoria
+                        if not op.get("done") and self._operation_matches_model_lifecycle(op):
                             self.current_op_name = op.get("name")
-                            return "waking"
+                            self.current_op_kind = self._operation_lifecycle_kind(op)
+                            return "sleeping" if self.current_op_kind == "undeploy" else "waking"
         except Exception as e:
             logger.error(f"Error listando operaciones del proyecto: {e}")
 
-        return "sleep"
+        return "error" if self.current_op_error else "sleep"
 
     def wake_model(self) -> dict:
-        """
-        Inicia el despliegue del modelo en el endpoint (despertar GPU T4 4-bits).
-        """
         import httpx
+
         status = self.get_model_status()
         if status == "active":
-            return {"status": "active", "message": "El modelo ya está activo."}
-        elif status == "waking":
-            return {"status": "waking", "message": "El modelo se está activando actualmente."}
+            return {"status": "active", "message": "El modelo ya esta activo."}
+        if status == "waking":
+            return {"status": "waking", "message": "El modelo se esta activando actualmente."}
 
         try:
-            token = self._get_vertex_token()
+            headers = self._vertex_headers()
         except Exception as e:
-            return {"status": "error", "message": f"Error de autenticación GCP: {str(e)}"}
+            return {"status": "error", "message": f"Error de autenticacion GCP: {str(e)}"}
 
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-
-        deploy_url = f"https://{config.VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/endpoints/{config.VERTEX_ENDPOINT_ID}:deployModel"
-        
+        deploy_url = self._vertex_api_url(self._vertex_endpoint_resource(), ":deployModel")
         payload = {
             "deployedModel": {
-                "model": f"projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/models/{config.VERTEX_MODEL_ID}@{config.VERTEX_MODEL_VERSION}",
-                "displayName": "tenz-1-nova-quantized",
+                "model": self._vertex_model_resource(),
+                "displayName": config.VERTEX_DEPLOYED_MODEL_DISPLAY_NAME,
                 "dedicatedResources": {
                     "machineSpec": {
-                        "machineType": "n1-standard-4",
-                        "acceleratorType": "NVIDIA_TESLA_T4",
-                        "acceleratorCount": 1
+                        "machineType": config.VERTEX_MACHINE_TYPE,
+                        "acceleratorType": config.VERTEX_ACCELERATOR_TYPE,
+                        "acceleratorCount": config.VERTEX_ACCELERATOR_COUNT,
                     },
                     "minReplicaCount": 1,
-                    "maxReplicaCount": 1
-                }
+                    "maxReplicaCount": 1,
+                },
             }
         }
 
         try:
-            logger.info("Enviando petición de despliegue a Vertex AI (Wake-on-Demand)...")
+            logger.info("Enviando peticion de despliegue a Vertex AI (Wake-on-Demand)...")
             with httpx.Client(timeout=30.0) as client:
                 resp = client.post(deploy_url, json=payload, headers=headers)
                 if resp.status_code in [200, 202]:
                     op_data = resp.json()
                     self.current_op_name = op_data.get("name")
+                    self.current_op_kind = "deploy"
+                    self.current_op_error = None
                     self.last_activity_time = time.time()
                     logger.info(f"Despliegue iniciado correctamente. LRO: {self.current_op_name}")
                     return {
                         "status": "waking",
-                        "message": "Activación iniciada con éxito. La GPU se estará levantando en 3-5 minutos.",
-                        "operation": self.current_op_name
+                        "message": "Activacion iniciada con exito. La GPU se esta levantando.",
+                        "operation": self.current_op_name,
                     }
-                else:
-                    logger.error(f"Error enviando petición de despliegue ({resp.status_code}): {resp.text}")
-                    return {
-                        "status": "error",
-                        "message": f"Error al iniciar el despliegue en Vertex AI: {resp.text}"
-                    }
+
+                self.current_op_error = resp.text
+                logger.error(f"Error enviando peticion de despliegue ({resp.status_code}): {resp.text}")
+                return {
+                    "status": "error",
+                    "message": f"Error al iniciar el despliegue en Vertex AI: {resp.text}",
+                }
         except Exception as e:
-            logger.error(f"Excepción en wake_model: {e}")
+            self.current_op_error = str(e)
+            logger.error(f"Excepcion en wake_model: {e}")
             return {"status": "error", "message": f"Error interno en el servidor: {str(e)}"}
 
     def sleep_model(self) -> dict:
-        """
-        Apaga la GPU desasociando (undeploy) todos los modelos del endpoint.
-        """
         import httpx
+
         try:
-            token = self._get_vertex_token()
+            headers = self._vertex_headers()
         except Exception as e:
-            return {"status": "error", "message": f"Error de autenticación GCP: {str(e)}"}
+            return {"status": "error", "message": f"Error de autenticacion GCP: {str(e)}"}
 
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-
-        endpoint_url = f"https://{config.VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/{config.VERTEX_PROJECT_ID}/locations/{config.VERTEX_LOCATION}/endpoints/{config.VERTEX_ENDPOINT_ID}"
+        endpoint_url = self._vertex_api_url(self._vertex_endpoint_resource())
         undeploy_url = f"{endpoint_url}:undeployModel"
 
         try:
-            logger.info("Obteniendo modelos desplegados para apagar la GPU...")
             with httpx.Client(timeout=10.0) as client:
                 resp = client.get(endpoint_url, headers=headers)
                 if resp.status_code != 200:
                     return {"status": "error", "message": f"Error consultando el endpoint: {resp.text}"}
-                
-                data = resp.json()
-                deployed_models = data.get("deployedModels", [])
-                
+
+                deployed_models = resp.json().get("deployedModels", [])
                 if not deployed_models:
                     self.current_op_name = None
-                    return {"status": "sleep", "message": "El modelo ya está en reposo (apagado)."}
+                    self.current_op_kind = None
+                    self.current_op_error = None
+                    return {"status": "sleep", "message": "El modelo ya esta en reposo."}
 
                 undeployed_count = 0
+                operation_name = None
                 for model in deployed_models:
                     deployed_model_id = model.get("id")
-                    if deployed_model_id:
-                        payload = {"deployedModelId": deployed_model_id}
-                        logger.info(f"Apagando (undeploy) modelo desplegado ID: {deployed_model_id}...")
-                        und_resp = client.post(undeploy_url, json=payload, headers=headers)
-                        if und_resp.status_code in [200, 202]:
-                            undeployed_count += 1
-                        else:
-                            logger.error(f"Error apagando modelo {deployed_model_id} ({und_resp.status_code}): {und_resp.text}")
+                    if not deployed_model_id:
+                        continue
 
-                self.current_op_name = None
-                return {
-                    "status": "sleep",
-                    "message": f"Se ha solicitado apagar el modelo. Desasociados {undeployed_count} modelos del endpoint."
-                }
+                    und_resp = client.post(
+                        undeploy_url,
+                        json={"deployedModelId": deployed_model_id},
+                        headers=headers,
+                    )
+                    if und_resp.status_code in [200, 202]:
+                        undeployed_count += 1
+                        operation_name = und_resp.json().get("name") or operation_name
+                    else:
+                        logger.error(f"Error apagando modelo {deployed_model_id} ({und_resp.status_code}): {und_resp.text}")
+
+                if undeployed_count:
+                    self.current_op_name = operation_name
+                    self.current_op_kind = "undeploy"
+                    self.current_op_error = None
+                    return {
+                        "status": "sleeping",
+                        "message": f"Se ha solicitado apagar el modelo. Desasociados {undeployed_count} modelos del endpoint.",
+                        "operation": operation_name,
+                    }
+
+                return {"status": "error", "message": "No se pudo desasociar ningun modelo del endpoint."}
         except Exception as e:
-            logger.error(f"Excepción en sleep_model: {e}")
+            self.current_op_error = str(e)
+            logger.error(f"Excepcion en sleep_model: {e}")
             return {"status": "error", "message": f"Error interno al apagar la GPU: {str(e)}"}
 
     def check_idle_shutdown(self) -> None:
@@ -839,4 +895,3 @@ class AIService:
                     self.sleep_model()
         except Exception as e:
             logger.error(f"Error durante el auto-apagado por inactividad: {e}")
-
