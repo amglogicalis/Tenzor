@@ -3,6 +3,8 @@ import time
 import uuid
 import logging
 import base64
+from datetime import datetime, timezone
+from hashlib import sha256
 from typing import Any, Dict, List, Optional
 from groq import Groq
 import google.generativeai as genai
@@ -38,7 +40,10 @@ class AIService:
         self.current_op_name = None
         self.current_op_kind = None
         self.current_op_error = None
+        self.current_op_started_at = None
         self.last_activity_time = time.time()
+        self.lifecycle_store = None
+        self._init_lifecycle_store()
 
         # Inicializar servicio RAG de documentación
         from app.services.rag_service import RAGService
@@ -657,6 +662,100 @@ class AIService:
             "Content-Type": "application/json"
         }
 
+    def _init_lifecycle_store(self) -> None:
+        if not config.SUPABASE_URL or not config.SUPABASE_KEY:
+            return
+
+        try:
+            from supabase import create_client
+
+            self.lifecycle_store = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+        except Exception as e:
+            logger.warning(f"No se pudo inicializar persistencia de lifecycle en Supabase: {e}")
+            self.lifecycle_store = None
+
+    def _lifecycle_state_id(self) -> str:
+        raw_key = f"{self._vertex_endpoint_resource()}::{self._vertex_model_resource().split('@', 1)[0]}"
+        return sha256(raw_key.encode("utf-8")).hexdigest()
+
+    def _now_iso(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def _save_lifecycle_state(
+        self,
+        status: str,
+        operation_name: Optional[str] = None,
+        operation_kind: Optional[str] = None,
+        message: Optional[str] = None,
+        started_at: Optional[str] = None,
+    ) -> None:
+        if not self.lifecycle_store:
+            return
+
+        try:
+            payload = {
+                "id": self._lifecycle_state_id(),
+                "endpoint_resource": self._vertex_endpoint_resource(),
+                "model_resource": self._vertex_model_resource().split("@", 1)[0],
+                "status": status,
+                "operation_name": operation_name,
+                "operation_kind": operation_kind,
+                "message": message,
+                "updated_at": self._now_iso(),
+            }
+            if started_at:
+                payload["operation_started_at"] = started_at
+
+            self.lifecycle_store.table(config.VERTEX_LIFECYCLE_STATE_TABLE).upsert(payload).execute()
+        except Exception as e:
+            logger.warning(f"No se pudo guardar estado lifecycle en Supabase: {e}")
+
+    def _load_lifecycle_state(self) -> Optional[Dict[str, Any]]:
+        if not self.lifecycle_store:
+            return None
+
+        try:
+            response = (
+                self.lifecycle_store
+                .table(config.VERTEX_LIFECYCLE_STATE_TABLE)
+                .select("*")
+                .eq("id", self._lifecycle_state_id())
+                .limit(1)
+                .execute()
+            )
+            rows = getattr(response, "data", None) or []
+            return rows[0] if rows else None
+        except Exception as e:
+            logger.warning(f"No se pudo leer estado lifecycle en Supabase: {e}")
+            return None
+
+    def _hydrate_lifecycle_from_store(self) -> None:
+        if self.current_op_name:
+            return
+
+        state = self._load_lifecycle_state()
+        if not state:
+            return
+
+        if state.get("status") in ("waking", "sleeping") and state.get("operation_name"):
+            self.current_op_name = state.get("operation_name")
+            self.current_op_kind = state.get("operation_kind")
+            self.current_op_started_at = state.get("operation_started_at")
+            self.current_op_error = None
+        elif state.get("status") == "error":
+            self.current_op_error = state.get("message")
+
+    def _operation_exceeded_timeout(self) -> bool:
+        if not self.current_op_started_at:
+            return False
+
+        try:
+            started_at = datetime.fromisoformat(str(self.current_op_started_at).replace("Z", "+00:00"))
+            elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
+            return elapsed > config.VERTEX_LIFECYCLE_OPERATION_TIMEOUT_SECONDS
+        except Exception:
+            return False
+
     def _operation_matches_model_lifecycle(self, op: Dict[str, Any]) -> bool:
         metadata = op.get("metadata") or {}
         metadata_text = str(metadata)
@@ -691,11 +790,14 @@ class AIService:
     def get_model_status(self) -> str:
         import httpx
 
+        self._hydrate_lifecycle_from_store()
+
         try:
             headers = self._vertex_headers()
         except Exception as e:
             logger.error(f"Error obteniendo token para el estado: {e}")
             self.current_op_error = f"Error de autenticacion GCP: {e}"
+            self._save_lifecycle_state("error", message=self.current_op_error)
             return "error"
 
         try:
@@ -704,11 +806,27 @@ class AIService:
                 self.current_op_name = None
                 self.current_op_kind = None
                 self.current_op_error = None
+                self.current_op_started_at = None
+                self._save_lifecycle_state("active")
                 return "active"
         except Exception as e:
             logger.error(f"Excepcion consultando endpoint: {e}")
 
         if self.current_op_name:
+            if self._operation_exceeded_timeout():
+                self.current_op_error = (
+                    f"La operacion Vertex excedio "
+                    f"{config.VERTEX_LIFECYCLE_OPERATION_TIMEOUT_SECONDS} segundos."
+                )
+                self._save_lifecycle_state(
+                    "error",
+                    operation_name=self.current_op_name,
+                    operation_kind=self.current_op_kind,
+                    message=self.current_op_error,
+                    started_at=self.current_op_started_at,
+                )
+                return "error"
+
             op_url = self._vertex_api_url(self.current_op_name)
             try:
                 with httpx.Client(timeout=10.0) as client:
@@ -716,26 +834,53 @@ class AIService:
                     if resp.status_code == 200:
                         op_data = resp.json()
                         if not op_data.get("done"):
+                            status = "sleeping" if self.current_op_kind == "undeploy" else "waking"
+                            self._save_lifecycle_state(
+                                status,
+                                operation_name=self.current_op_name,
+                                operation_kind=self.current_op_kind,
+                                started_at=self.current_op_started_at,
+                            )
                             return "sleeping" if self.current_op_kind == "undeploy" else "waking"
 
                         finished_kind = self.current_op_kind
-                        self.current_op_name = None
-                        self.current_op_kind = None
                         if "error" in op_data:
                             self.current_op_error = str(op_data["error"])
                             logger.error(f"La operacion de lifecycle Vertex fallo: {self.current_op_error}")
+                            self._save_lifecycle_state(
+                                "error",
+                                operation_name=self.current_op_name,
+                                operation_kind=self.current_op_kind,
+                                message=self.current_op_error,
+                                started_at=self.current_op_started_at,
+                            )
                             return "error"
 
                         deployed_models = self._get_endpoint_deployed_models(headers)
                         if deployed_models:
+                            self.current_op_name = None
+                            self.current_op_kind = None
                             self.current_op_error = None
+                            self.current_op_started_at = None
+                            self._save_lifecycle_state("active")
                             return "active"
 
                         if finished_kind == "undeploy":
+                            self.current_op_name = None
+                            self.current_op_kind = None
                             self.current_op_error = None
+                            self.current_op_started_at = None
+                            self._save_lifecycle_state("sleep")
                             return "sleep"
 
                         # La LRO puede finalizar unos segundos antes de que el endpoint refleje deployedModels.
+                        self._save_lifecycle_state(
+                            "waking",
+                            operation_name=self.current_op_name,
+                            operation_kind=self.current_op_kind,
+                            message="LRO finalizada; esperando reflejo de deployedModels en el endpoint.",
+                            started_at=self.current_op_started_at,
+                        )
                         return "waking"
                     logger.error(f"Error consultando operacion ({resp.status_code}): {resp.text}")
             except Exception as e:
@@ -753,11 +898,21 @@ class AIService:
                         if not op.get("done") and self._operation_matches_model_lifecycle(op):
                             self.current_op_name = op.get("name")
                             self.current_op_kind = self._operation_lifecycle_kind(op)
+                            self.current_op_started_at = self._now_iso()
+                            status = "sleeping" if self.current_op_kind == "undeploy" else "waking"
+                            self._save_lifecycle_state(
+                                status,
+                                operation_name=self.current_op_name,
+                                operation_kind=self.current_op_kind,
+                                started_at=self.current_op_started_at,
+                            )
                             return "sleeping" if self.current_op_kind == "undeploy" else "waking"
         except Exception as e:
             logger.error(f"Error listando operaciones del proyecto: {e}")
 
-        return "error" if self.current_op_error else "sleep"
+        final_status = "error" if self.current_op_error else "sleep"
+        self._save_lifecycle_state(final_status, message=self.current_op_error)
+        return final_status
 
     def wake_model(self) -> dict:
         import httpx
@@ -792,14 +947,22 @@ class AIService:
 
         try:
             logger.info("Enviando peticion de despliegue a Vertex AI (Wake-on-Demand)...")
-            with httpx.Client(timeout=30.0) as client:
+            with httpx.Client(timeout=config.VERTEX_DEPLOY_HTTP_TIMEOUT_SECONDS) as client:
                 resp = client.post(deploy_url, json=payload, headers=headers)
                 if resp.status_code in [200, 202]:
                     op_data = resp.json()
                     self.current_op_name = op_data.get("name")
                     self.current_op_kind = "deploy"
                     self.current_op_error = None
+                    self.current_op_started_at = self._now_iso()
                     self.last_activity_time = time.time()
+                    self._save_lifecycle_state(
+                        "waking",
+                        operation_name=self.current_op_name,
+                        operation_kind=self.current_op_kind,
+                        message="DESPERTANDO",
+                        started_at=self.current_op_started_at,
+                    )
                     logger.info(f"Despliegue iniciado correctamente. LRO: {self.current_op_name}")
                     return {
                         "status": "waking",
@@ -808,6 +971,7 @@ class AIService:
                     }
 
                 self.current_op_error = resp.text
+                self._save_lifecycle_state("error", message=self.current_op_error)
                 logger.error(f"Error enviando peticion de despliegue ({resp.status_code}): {resp.text}")
                 return {
                     "status": "error",
@@ -815,6 +979,7 @@ class AIService:
                 }
         except Exception as e:
             self.current_op_error = str(e)
+            self._save_lifecycle_state("error", message=self.current_op_error)
             logger.error(f"Excepcion en wake_model: {e}")
             return {"status": "error", "message": f"Error interno en el servidor: {str(e)}"}
 
@@ -840,6 +1005,8 @@ class AIService:
                     self.current_op_name = None
                     self.current_op_kind = None
                     self.current_op_error = None
+                    self.current_op_started_at = None
+                    self._save_lifecycle_state("sleep")
                     return {"status": "sleep", "message": "El modelo ya esta en reposo."}
 
                 undeployed_count = 0
@@ -864,6 +1031,14 @@ class AIService:
                     self.current_op_name = operation_name
                     self.current_op_kind = "undeploy"
                     self.current_op_error = None
+                    self.current_op_started_at = self._now_iso()
+                    self._save_lifecycle_state(
+                        "sleeping",
+                        operation_name=self.current_op_name,
+                        operation_kind=self.current_op_kind,
+                        message="APAGANDO",
+                        started_at=self.current_op_started_at,
+                    )
                     return {
                         "status": "sleeping",
                         "message": f"Se ha solicitado apagar el modelo. Desasociados {undeployed_count} modelos del endpoint.",
@@ -873,6 +1048,7 @@ class AIService:
                 return {"status": "error", "message": "No se pudo desasociar ningun modelo del endpoint."}
         except Exception as e:
             self.current_op_error = str(e)
+            self._save_lifecycle_state("error", message=self.current_op_error)
             logger.error(f"Excepcion en sleep_model: {e}")
             return {"status": "error", "message": f"Error interno al apagar la GPU: {str(e)}"}
 

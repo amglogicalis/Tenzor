@@ -384,6 +384,7 @@ def test_wake_model_uses_configurable_vertex_resources():
     old_machine = config.VERTEX_MACHINE_TYPE
     old_accel_type = config.VERTEX_ACCELERATOR_TYPE
     old_accel_count = config.VERTEX_ACCELERATOR_COUNT
+    old_deploy_timeout = config.VERTEX_DEPLOY_HTTP_TIMEOUT_SECONDS
 
     config.VERTEX_ENDPOINT_RESOURCE = "projects/p/locations/us-central1/endpoints/e-custom"
     config.VERTEX_MODEL_RESOURCE = "projects/p/locations/us-central1/models/m-custom@7"
@@ -391,8 +392,15 @@ def test_wake_model_uses_configurable_vertex_resources():
     config.VERTEX_MACHINE_TYPE = "g2-standard-24"
     config.VERTEX_ACCELERATOR_TYPE = "NVIDIA_L4"
     config.VERTEX_ACCELERATOR_COUNT = 2
+    config.VERTEX_DEPLOY_HTTP_TIMEOUT_SECONDS = 7.0
 
     post_calls = []
+    client_timeouts = []
+    original_client_init = httpx.Client.__init__
+
+    def mock_client_init(self, *args, **kwargs):
+        client_timeouts.append(kwargs.get("timeout"))
+        original_client_init(self, *args, **kwargs)
 
     def mock_post_fn(self, url, *args, **kwargs):
         post_calls.append((url, kwargs.get("json")))
@@ -405,11 +413,15 @@ def test_wake_model_uses_configurable_vertex_resources():
     try:
         with patch.object(ai_service, "get_model_status", return_value="sleep"), \
              patch.object(ai_service, "_vertex_headers", return_value={"Authorization": "Bearer test"}), \
+             patch.object(ai_service, "_save_lifecycle_state") as mock_save_state, \
+             patch("httpx.Client.__init__", new=mock_client_init), \
              patch("httpx.Client.post", new=mock_post_fn):
             result = ai_service.wake_model()
 
         assert result["status"] == "waking"
+        assert result["operation"] == "operations/deploy-123"
         assert post_calls
+        assert 7.0 in client_timeouts
         url, payload = post_calls[0]
         assert "endpoints/e-custom:deployModel" in url
         assert payload["deployedModel"]["model"] == "projects/p/locations/us-central1/models/m-custom@7"
@@ -417,6 +429,13 @@ def test_wake_model_uses_configurable_vertex_resources():
         assert payload["deployedModel"]["dedicatedResources"]["machineSpec"]["machineType"] == "g2-standard-24"
         assert payload["deployedModel"]["dedicatedResources"]["machineSpec"]["acceleratorType"] == "NVIDIA_L4"
         assert payload["deployedModel"]["dedicatedResources"]["machineSpec"]["acceleratorCount"] == 2
+        mock_save_state.assert_called_with(
+            "waking",
+            operation_name="operations/deploy-123",
+            operation_kind="deploy",
+            message="DESPERTANDO",
+            started_at=ai_service.current_op_started_at,
+        )
     finally:
         config.VERTEX_ENDPOINT_RESOURCE = old_endpoint_resource
         config.VERTEX_MODEL_RESOURCE = old_model_resource
@@ -424,6 +443,11 @@ def test_wake_model_uses_configurable_vertex_resources():
         config.VERTEX_MACHINE_TYPE = old_machine
         config.VERTEX_ACCELERATOR_TYPE = old_accel_type
         config.VERTEX_ACCELERATOR_COUNT = old_accel_count
+        config.VERTEX_DEPLOY_HTTP_TIMEOUT_SECONDS = old_deploy_timeout
+        ai_service.current_op_name = None
+        ai_service.current_op_kind = None
+        ai_service.current_op_error = None
+        ai_service.current_op_started_at = None
 
 
 def test_sleep_model_returns_sleeping_while_undeploy_operation_runs():
@@ -462,6 +486,73 @@ def test_sleep_model_returns_sleeping_while_undeploy_operation_runs():
         ai_service.current_op_name = None
         ai_service.current_op_kind = None
         ai_service.current_op_error = None
+        ai_service.current_op_started_at = None
+
+
+def test_lifecycle_operation_timeout_marks_error():
+    """Evita que un deploy atascado quede indefinidamente en estado waking."""
+    from app.routers.chat import ai_service
+    from datetime import datetime, timedelta, timezone
+
+    old_timeout = config.VERTEX_LIFECYCLE_OPERATION_TIMEOUT_SECONDS
+    config.VERTEX_LIFECYCLE_OPERATION_TIMEOUT_SECONDS = 2700
+    ai_service.current_op_name = "operations/deploy-stuck"
+    ai_service.current_op_kind = "deploy"
+    ai_service.current_op_error = None
+    ai_service.current_op_started_at = (datetime.now(timezone.utc) - timedelta(seconds=2701)).isoformat()
+
+    try:
+        with patch.object(ai_service, "_vertex_headers", return_value={"Authorization": "Bearer test"}), \
+             patch.object(ai_service, "_get_endpoint_deployed_models", return_value=[]), \
+             patch.object(ai_service, "_save_lifecycle_state") as mock_save_state:
+            status = ai_service.get_model_status()
+
+        assert status == "error"
+        assert "2700" in ai_service.current_op_error
+        mock_save_state.assert_called()
+        assert mock_save_state.call_args.args[0] == "error"
+    finally:
+        config.VERTEX_LIFECYCLE_OPERATION_TIMEOUT_SECONDS = old_timeout
+        ai_service.current_op_name = None
+        ai_service.current_op_kind = None
+        ai_service.current_op_error = None
+        ai_service.current_op_started_at = None
+
+
+def test_status_hydrates_running_operation_from_lifecycle_store():
+    """Un reinicio del backend no debe perder la operacion wake/sleep en curso."""
+    from app.routers.chat import ai_service
+    from datetime import datetime, timezone
+
+    ai_service.current_op_name = None
+    ai_service.current_op_kind = None
+    ai_service.current_op_error = None
+    ai_service.current_op_started_at = None
+    started_at = datetime.now(timezone.utc).isoformat()
+
+    try:
+        with patch.object(ai_service, "_load_lifecycle_state", return_value={
+            "status": "waking",
+            "operation_name": "operations/deploy-restored",
+            "operation_kind": "deploy",
+            "operation_started_at": started_at,
+        }), \
+             patch.object(ai_service, "_vertex_headers", return_value={"Authorization": "Bearer test"}), \
+             patch.object(ai_service, "_get_endpoint_deployed_models", return_value=[]), \
+             patch("httpx.Client.get") as mock_get, \
+             patch.object(ai_service, "_save_lifecycle_state"):
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = {"done": False}
+            status = ai_service.get_model_status()
+
+        assert status == "waking"
+        assert ai_service.current_op_name == "operations/deploy-restored"
+        assert ai_service.current_op_kind == "deploy"
+    finally:
+        ai_service.current_op_name = None
+        ai_service.current_op_kind = None
+        ai_service.current_op_error = None
+        ai_service.current_op_started_at = None
 
 
 def test_model_garden_resource_does_not_append_version():
@@ -530,7 +621,5 @@ def test_custom_vertex_endpoint_uses_model_garden_messages_payload(mock_request,
         ]
     finally:
         config.CUSTOM_MODEL_BACKING_NAME = old_backing
-
-
 
 

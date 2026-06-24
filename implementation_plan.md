@@ -1,193 +1,515 @@
-# Plan de Implementación: Arzor AIs Platform
+# Plan de Implementacion: Arzor AIs Platform sobre Tenzor
 
-Este plan detalla la evolución de **Tenzor** para albergar una subplataforma llamada **Arzor AIs Platform** (nombre que combina Arthur y Tenzor por el concepto central de la **Arzor Round Table**). Es un entorno donde cualquier usuario puede registrarse con usuario/contraseña, especializar una IA con instrucciones y documentos propios (PDFs, TXT, MD), compartirla en una biblioteca pública y organizar debates colaborativos (**Arzor Round Table**) protegidos contra fallos de API y saturación de cuotas.
+Este documento define la evolucion de Tenzor hacia **Arzor AIs Platform**: una plataforma multiusuario para crear agentes de IA especializados, alimentarlos con documentos propios, compartirlos en una biblioteca publica y coordinar debates multi-agente mediante **Arzor Round Table**.
 
----
-
-## 💡 Concepto de Especialización Híbrida y Serverless
-
-Para dar soporte a múltiples usuarios sin consumir tus créditos de Google Cloud y evitar bloqueos por rate-limit (429), utilizaremos:
-
-1. **Matriz de Fallback Multi-Proveedor (Google, Groq y OpenRouter)**:
-   - Agregamos **OpenRouter** como tercer proveedor principal de modelos.
-   - Al crear un agente, el sistema asocia modelos de los **3 proveedores** clasificados según la necesidad del usuario:
-     * **Inteligencia General (Pro)**: `gemini-2.5-pro` (Google), `llama-3.3-70b-instruct` (Groq), `qwen/qwen-2.5-72b-instruct` (OpenRouter).
-     * **Equilibrio (Balanced)**: `gemini-2.5-flash` (Google), `qwen3.6-27b` (Groq), `microsoft/phi-4` o `qwen/qwen-2.5-32b-instruct` (OpenRouter).
-     * **Velocidad/Eficiencia (Fast)**: `gemini-2.5-flash-lite` (Google), `llama-3.2-3b-preview` (Groq), `google/gemma-2-9b-it:free` (OpenRouter).
-   - El usuario selecciona un modelo principal según su preferencia (Rapidez/Eficiencia/Equilibrio). Si al interactuar con el agente este falla o da error, el sistema conmuta automáticamente de forma transparente a los otros dos modelos de respaldo (configurados con el mismo RAG y Pseudo-LoRA).
-
-2. **El Cerebro Núcleo / Vigilante de Sesión (Orquestador Asíncrono)**:
-   - Se implementará un servicio de monitorización y orquestación inteligente para cada sesión de usuario.
-   - **Clasificación Automática**: Al crear una especialización, el Vigilante hace una consulta rápida a un modelo ligero y económico (`gemini-2.5-flash-lite`) para que clasifique la especialidad y asigne de forma óptima los mejores modelos base por provider.
-   - **Prevención de Colisión de API Keys**: Controla que en debates de la **Arzor Round Table**, los diferentes agentes activos no hagan llamadas utilizando la misma API key exactamente al mismo milisegundo (distribuye y desfasa los tiempos de llamada).
-   - **Gestión de Errores e Hilos**: Captura activamente los errores 429 y conmuta los modelos en la matriz de fallback.
-
-3. **Pool Rotativo de API Keys Descentralizado por Proveedor**:
-   - Cada usuario (y el sistema de forma global) puede configurar una lista o pool de API Keys para cada proveedor (Google, Groq, OpenRouter).
-   - El backend balanceará el uso de claves para evitar bloqueos por IP y límites de RPM de los proveedores.
-
-4. **Adaptive Instruction Compilation (Motor de Emulated Fine-Tuning)**:
-   - Basado en `gemini-2.5-pro`, analiza la descripción informal del usuario y destila las directrices maestras (`system_instructions`) y una matriz de pesos sintéticos (`pseudo_lora_weights` JSONB) con 10-15 ejemplos de interacción de pocas pasadas (*few-shot Q&A*) de alta calidad.
-
-5. **Database-backed RAG (Subida de Archivos)**:
-   - El usuario sube PDFs o archivos de texto plano. El backend extrae el texto, lo fragmenta y lo inserta en Supabase (`agent_knowledge`), recuperando contexto mediante búsqueda nativa rápida en Postgres.
-
-6. **Navegación e Integración Dual Protegida**:
-   - Arzor AIs Platform será accesible mediante enlace desde Tenzor AI y viceversa.
-   - Para entrar a **Tenzor AI** (el chat individual privado original), se requerirá obligatoriamente tu API Key maestra del admin, garantizando la seguridad del portal personal.
+Tenzor AI actual debe mantenerse como chat tecnico privado y API compatible con OpenAI. Arzor se implementara como una subplataforma separada, accesible desde `/platform`, sin romper los endpoints existentes de Tenzor.
 
 ---
 
-## 🛠️ Esquema de Base de Datos (Supabase)
+## Vision del Producto
+
+Arzor AIs Platform debe permitir:
+
+- Registro/login de usuarios.
+- Creacion de agentes personalizados con instrucciones, ejemplos y documentos.
+- RAG por agente con documentos PDF, TXT, MD y codigo.
+- Biblioteca publica de agentes.
+- Chat individual con agentes personalizados.
+- Fallback multi-proveedor: Google, Groq y OpenRouter.
+- Pool de API keys por proveedor, con claves globales y claves del usuario.
+- Control de 429, cooldowns, backoff y aislamiento de cuotas.
+- Debates multi-agente en Arzor Round Table.
+- En una fase posterior, CLI local para generar proyectos con equipos de agentes.
+
+---
+
+## Principio Tecnico: AFT / Adaptive Fractal Tuning
+
+Arzor utilizara **AFT (Adaptive Fractal Tuning)** como modelo propio de refinamiento de agentes. AFT no es fine-tuning de pesos ni LoRA literal: es una capa de especializacion dinamica que compila perfiles de agente, recupera contexto, aplica memoria versionada y ejecuta evaluacion continua para adaptar el comportamiento del modelo sin modificar sus pesos.
+
+El termino "fractal" indica que el mismo patron de ajuste se repite por capas:
+
+- Capa global de Tenzor.
+- Capa de plataforma Arzor.
+- Capa del agente.
+- Capa del usuario.
+- Capa de sesion.
+- Capa de tarea.
+- Capa de evidencia/RAG.
+- Capa de evaluacion y feedback.
+
+Cada agente se representa mediante un **AFT Profile** versionado:
+
+- `system_instructions`: prompt maestro compilado.
+- `behavior_examples`: 10-15 ejemplos few-shot de alta calidad.
+- `style_rules`: reglas de tono, limites, formato y decision.
+- `domain_constraints`: alcance tecnico, restricciones y fuentes preferidas.
+- `retrieval_profile`: estrategia RAG del agente.
+- `tool_policy`: que herramientas o proveedores puede usar.
+- `memory_hints`: cache y aprendizajes aprobados por el usuario.
+- `evaluation_suite`: pruebas que validan si el agente conserva su comportamiento esperado.
+
+AFT busca conseguir una especializacion muy fiel sin entrenar pesos, combinando:
+
+- Buen prompt maestro.
+- Few-shot consistente.
+- RAG de calidad.
+- Memoria verificada.
+- Versionado y rollback.
+- Feedback del usuario.
+- Evaluaciones automaticas.
+- Sintesis controlada de nuevas versiones del perfil.
+
+AFT no debe presentarse como LoRA real ni como fine-tuning de pesos. Debe presentarse como un sistema de especializacion operacional, auditable y reversible. Si un agente acumula suficientes ejemplos validados, AFT podra exportar un dataset para fine-tuning real en una fase posterior.
+
+---
+
+## Arquitectura de Alto Nivel
+
+### Modulos Backend
+
+- `app/routers/platform_auth.py`: autenticacion de usuarios de plataforma.
+- `app/routers/platform_agents.py`: CRUD de agentes.
+- `app/routers/platform_knowledge.py`: subida y gestion de documentos.
+- `app/routers/platform_chat.py`: chat con agentes personalizados.
+- `app/routers/round_table.py`: debates multi-agente.
+- `app/services/platform_auth_service.py`: sesiones, perfiles y permisos.
+- `app/services/agent_service.py`: agentes, versiones y visibilidad.
+- `app/services/instruction_compiler_service.py`: compilacion de perfiles.
+- `app/services/provider_router_service.py`: routing Google/Groq/OpenRouter.
+- `app/services/provider_key_pool_service.py`: pools, cooldowns y rotacion.
+- `app/services/platform_rag_service.py`: RAG por agente.
+- `app/services/round_table_service.py`: orquestacion de debates.
+- `app/services/cooldown_service.py`: control de 429 y backoff.
+
+### Separacion de Productos
+
+- **Tenzor AI actual**: chat tecnico privado, API keys, Nova/Meteor, RAG interno.
+- **Arzor Platform**: plataforma multiusuario, agentes, documentos, biblioteca.
+- **Arzor Round Table**: debates multi-agente.
+- **Arzor DevCrew CLI**: cliente local posterior para generar proyectos.
+
+---
+
+## Expansion Manual en Supabase
+
+La expansion de base de datos debe hacerse de forma manual y controlada por el usuario desde Supabase.
+
+Flujo recomendado:
+
+1. Codex genera archivos SQL de migracion versionados, por ejemplo:
+   - `supabase/migrations/001_platform_core.sql`
+   - `supabase/migrations/002_agents.sql`
+   - `supabase/migrations/003_knowledge.sql`
+   - `supabase/migrations/004_provider_keys.sql`
+2. El usuario revisa el SQL.
+3. El usuario lo ejecuta manualmente en Supabase SQL Editor o mediante Supabase CLI si lo prefiere.
+4. Codex no debe modificar produccion automaticamente sin confirmacion explicita.
+5. Cada fase debe incluir SQL reversible o, como minimo, instrucciones de rollback.
+
+Requisitos obligatorios:
+
+- Row Level Security activado en tablas multiusuario.
+- Politicas RLS por `user_id`.
+- Indices adecuados.
+- `created_at`, `updated_at` y, cuando aplique, `deleted_at`.
+- No guardar API keys en texto plano si van a ser persistentes.
+- Separar claves globales del sistema y claves aportadas por usuarios.
+
+---
+
+## Esquema Base Propuesto
+
+El esquema inicial debe evolucionar el plan original con tablas adicionales:
 
 ```sql
--- Perfiles de usuario vinculados al Auth clásico
 CREATE TABLE profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     username VARCHAR(50) UNIQUE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    display_name VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Agentes personalizados creados por los usuarios
 CREATE TABLE custom_agents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     name VARCHAR(100) NOT NULL,
     description TEXT,
     category VARCHAR(50) NOT NULL,
-    system_instructions TEXT NOT NULL,       -- Prompt maestro compilado
-    pseudo_lora_weights JSONB NOT NULL,       -- Matriz de 10-15 ejemplos Q&A
-    base_model VARCHAR(50) DEFAULT 'gemini-2.5-flash-lite' NOT NULL,
+    current_version_id UUID,
+    base_tier VARCHAR(20) DEFAULT 'balanced' NOT NULL,
     is_public BOOLEAN DEFAULT FALSE NOT NULL,
     level INTEGER DEFAULT 1 NOT NULL,
     experience INTEGER DEFAULT 0 NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    deleted_at TIMESTAMPTZ
 );
 
--- Fragmentos de conocimiento y mapa conceptual (GraphRAG)
+CREATE TABLE agent_versions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id UUID REFERENCES custom_agents(id) ON DELETE CASCADE NOT NULL,
+    version INTEGER NOT NULL,
+    system_instructions TEXT NOT NULL,
+    behavior_examples JSONB NOT NULL,
+    style_rules JSONB NOT NULL DEFAULT '{}'::jsonb,
+    domain_constraints JSONB NOT NULL DEFAULT '{}'::jsonb,
+    retrieval_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    UNIQUE(agent_id, version)
+);
+
+CREATE TABLE agent_files (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id UUID REFERENCES custom_agents(id) ON DELETE CASCADE NOT NULL,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    filename TEXT NOT NULL,
+    content_type TEXT,
+    storage_path TEXT,
+    status TEXT DEFAULT 'processing' NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
 CREATE TABLE agent_knowledge (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id UUID REFERENCES custom_agents(id) ON DELETE CASCADE NOT NULL,
-    concept_node VARCHAR(100) NOT NULL,       -- Nombre del nodo conceptual
-    related_to VARCHAR(100),                  -- Relación con otro nodo
-    content TEXT NOT NULL,                     -- Texto plano del fragmento
-    tsv_content tsvector,                     -- Búsqueda por texto en Postgres
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    file_id UUID REFERENCES agent_files(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    heading TEXT,
+    concept_node TEXT,
+    related_to TEXT,
+    content TEXT NOT NULL,
+    tsv_content TSVECTOR,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Caché sináptico del agente para auto-aprendizaje y optimización
+CREATE TABLE provider_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    key_label TEXT NOT NULL,
+    encrypted_key TEXT NOT NULL,
+    scope TEXT DEFAULT 'user' NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    cooldown_until TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE provider_usage_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    provider_key_id UUID REFERENCES provider_keys(id) ON DELETE SET NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error_code TEXT,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0,
+    latency_ms INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE chat_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    agent_id UUID REFERENCES custom_agents(id) ON DELETE SET NULL,
+    title TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE chat_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID REFERENCES chat_sessions(id) ON DELETE CASCADE NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
 CREATE TABLE agent_cache (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id UUID REFERENCES custom_agents(id) ON DELETE CASCADE NOT NULL,
+    query_hash TEXT NOT NULL,
     query TEXT NOT NULL,
     response TEXT NOT NULL,
-    user_feedback INTEGER DEFAULT 0,          -- +1 (pulgar arriba), -1 (abajo)
+    user_feedback INTEGER DEFAULT 0,
     times_used INTEGER DEFAULT 1 NOT NULL,
-    last_used_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    last_used_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    UNIQUE(agent_id, query_hash)
 );
 
--- Estructura de Mesas Redondas (Round Tables)
 CREATE TABLE round_tables (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Miembros de cada mesa redonda (IAs invitadas)
 CREATE TABLE round_table_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     table_id UUID REFERENCES round_tables(id) ON DELETE CASCADE NOT NULL,
-    agent_id UUID REFERENCES custom_agents(id) ON DELETE CASCADE NOT NULL
+    agent_id UUID REFERENCES custom_agents(id) ON DELETE CASCADE NOT NULL,
+    turn_order INTEGER DEFAULT 0 NOT NULL
 );
 ```
 
 ---
 
-## 🗺️ Fases de Implementación y Puntos de Verificación
+## Orden Correcto de Implementacion
 
-Para evitar la saturación de código y garantizar la máxima calidad, el proyecto se dividirá en 7 fases consecutivas. Cada fase requerirá pruebas automáticas y manuales para avanzar.
+### Fase 0: Base Tecnica y Migraciones
 
-### 📍 Fase 1: Autenticación, Base de Datos y Rutas Base
-* **Objetivo**: Configurar el esquema de Supabase, habilitar el registro/login con usuario y contraseña, y crear el esqueleto de endpoints de administración en FastAPI.
-* **Componentes**:
-  - `app/routers/platform_auth.py` [NEW]
-  - `app/services/platform_key_service.py` [NEW] (Gestión de usuarios y tokens en base a cookies/sesiones JWT).
-* **Verificación**:
-  - Validar registro y login de usuarios de prueba.
-  - Asegurar que las llamadas a base de datos se aíslen correctamente por `user_id`.
+Objetivo:
+Preparar el proyecto para crecer sin romper Tenzor AI actual.
 
-### 📍 Fase 2: El Sintetizador de Agentes Optimizado (Pseudo-LoRA Engine)
-* **Objetivo**: Programar el motor de compilación de agentes robusto y potente. Recibe la descripción informal y de forma asíncrona genera el set de directrices y la matriz JSONB (`pseudo_lora_weights`) usando Pydantic, reintentos en caliente y validación lógica.
-* **Componentes**:
-  - `app/routers/platform_agents.py` [NEW] (Ruta `POST /platform/agents`).
-  - Lógica de Meta-Prompting avanzado en `gemini-2.5-pro` estructurado, con control de temperatura.
-* **Verificación**:
-  - Test unitario: Crear un agente técnico y verificar que la matriz `pseudo_lora_weights` contiene de 10 a 15 ejemplos Q&A válidos, con alta consistencia de comportamiento y formato correcto.
+Componentes:
 
-### 📍 Fase 3: RAG con Subida de Archivos y Mapa Sináptico
-* **Objetivo**: Integrar la subida de PDFs/Textos desde la UI, extraer el contenido, segmentar y construir el grafo de relaciones conceptuales en la base de datos.
-* **Componentes**:
-  - Integrar lector de PDFs en FastAPI.
-  - Generador de grafos conceptuales: Extraer entidades clave y asociarlas (`concept_node` -> `related_to`).
-  - Lógica de búsqueda semántica/léxica nativa en Postgres.
-* **Verificación**:
-  - Subir un PDF de prueba de 10 páginas, verificar que se guarda indexado en Supabase y que las búsquedas a través del chat recuperan los chunks correspondientes.
+- Definir estructura de routers/services/modelos.
+- Crear carpeta `supabase/migrations`.
+- Generar SQL de tablas base.
+- Documentar variables de entorno.
+- Definir contratos API iniciales.
 
-### 📍 Fase 4: Chat con Control Inteligente de 429 y Fallback
-* **Objetivo**: Actualizar el motor de chat para soportar agentes personalizados, ordenando de forma rápida en memoria los pesos Pseudo-LoRA, e implementando el middleware detector de 429 con cooldown dinámico y aislamiento de cuotas.
-* **Componentes**:
-  - `app/routers/platform_chat.py` [NEW] (Ruta `/platform/chat`).
-  - Modificación de `app/services/ai_service.py` [MODIFY] para recibir API Keys del usuario en cada petición y enrutar la inferencia.
-  - Capturador de excepciones de API (Groq y Gemini) para capturar 429 y reaccionar devolviendo códigos de control.
-* **Verificación**:
-  - Test de stress: Forzar llamadas consecutivas rápidas simulando error 429 en una clave, y verificar que el backend devuelve un evento de cooldown estructurado (`status: "cooldown"`, `retry_after: N`) sin romper el contexto del chat.
+Verificacion:
 
-### 📍 Fase 5: Arzor Round Table (Debates de Agentes)
-* **Objetivo**: Diseñar la lógica de orquestación de discusiones grupales.
-* **Componentes**:
-  - `app/routers/round_table.py` [NEW]
-  - Bucle secuencial de inferencia de debates con cola asíncrona (`asyncio.Queue`) para evitar saturación de 429 en turnos consecutivos.
-* **Verificación**:
-  - Iniciar una Mesa Redonda con un Programador y un Tester sobre un fragmento de código, validando que el output final sea una conversación coherente entre ambos agentes.
-
-### 📍 Fase 6: Caché de Memoria y Evolución Autónoma
-* **Objetivo**: Programar el sistema de ahorro de tokens mediante la comprobación del historial y el auto-ajuste de comportamiento basado en el feedback del usuario.
-* **Componentes**:
-  - Lógica de interceptación en chat: Verificar `agent_cache` antes de llamar a las APIs.
-  - Tarea en segundo plano para re-sintetizar pesos Pseudo-LoRA si un agente recibe retroalimentación negativa (-1) en un chat.
-* **Verificación**:
-  - Enviar una pregunta idéntica dos veces. Verificar mediante los logs del servidor que la segunda llamada se sirve directamente desde la base de datos consumiendo 0 tokens de API.
-
-### 📍 Fase 7: Interfaz Visual "Neural Sandbox Console" y UX Antirruido
-* **Objetivo**: Diseñar y maquetar la interfaz web en `/platform` (`platform.html`, CSS, JS) con estilo visual Sci-Fi premium, Canvas para el Mapa Sináptico y los controles del Pool de Keys.
-* **UX Anti-429**:
-  - Desactivación y bloqueo visual en chat al recibir eventos de cooldown.
-  - Cuenta atrás sci-fi en tiempo real animada en el área del prompt.
-* **Verificación**:
-  - Ejecutar múltiples usuarios simultáneos, bloquear a uno por límite de cuota (429 simulado) y certificar que la interfaz de dicho usuario entra en pausa visual elegante mientras que el resto de usuarios chatea normalmente.
-
-### 📍 Fase 8: Arzor DevCrew CLI (Desarrollo Local Autónomo) [Fase 2 del Proyecto]
-* **Objetivo**: Desarrollar la herramienta de terminal para la creación física de proyectos locales guiada por debates multi-agente en el servidor, con control estricto de cuotas para evitar errores 429.
-* **Componentes**:
-  - `cli/tenzor_crew.py` [NEW]: Cliente CLI local en Python.
-  - Endpoints del servidor `/platform/crew/plan` (Debate y estructuración de JSON) y `/platform/crew/write` (Generación de código por archivo).
-* **Mecanismos Anti-429 & Ahorro**:
-  - **Debouncer Cliente-Servidor**: El CLI local inyecta pausas obligatorias de 1.5 a 3 segundos entre peticiones de creación de archivos.
-  - **Backoff Exponencial Local**: Si la API del servidor devuelve un error 429, el CLI local reintenta automáticamente duplicando el tiempo de espera (e.g., 2s, 4s, 8s, 16s...) y mostrando telemetría en tiempo real: *"Rate limit alcanzado. Reintentando en X segundos..."*.
-  - **Compresión por Stubs (Firmas de Código)**: Para que los agentes escriban un archivo sin consumir memoria innecesaria, el CLI no envía el código completo de todo el proyecto. Genera stubs ligeros (cabeceras de funciones/clases sin lógica) de los demás archivos y los envía como contexto de referencia técnica.
-* **Verificación**:
-  - Ejecutar el CLI local para generar un microservicio completo (FastAPI + base de datos) y certificar que escribe correctamente la estructura de directorios y los archivos funcionales sin disparar errores 429.
+- Tests existentes siguen pasando.
+- SQL revisado manualmente por el usuario antes de ejecutarse en Supabase.
 
 ---
 
-## 🚀 Instrucción de Arranque Rápido para el Agente
+### Fase 1: Auth, Profiles y Seguridad Multiusuario
 
-Cuando el usuario dé la orden directa:
+Objetivo:
+Habilitar login/registro y aislamiento por usuario.
+
+Componentes:
+
+- `app/routers/platform_auth.py`
+- `app/services/platform_auth_service.py`
+- Integracion con Supabase Auth.
+- RLS en `profiles`.
+- Sesion por cookie segura o bearer token de Supabase.
+
+Verificacion:
+
+- Registro y login de usuario.
+- Usuario A no puede leer datos de usuario B.
+- Tests de permisos.
+
+---
+
+### Fase 2: CRUD de Agentes Personalizados
+
+Objetivo:
+Permitir crear, editar, listar, borrar y publicar agentes.
+
+Componentes:
+
+- `app/routers/platform_agents.py`
+- `app/services/agent_service.py`
+- Tablas `custom_agents` y `agent_versions`.
+- Versionado del perfil de agente.
+
+Verificacion:
+
+- Crear agente privado.
+- Publicar agente.
+- Crear nueva version sin perder la anterior.
+
+---
+
+### Fase 3: AFT Compiler / Adaptive Fractal Tuning
+
+Objetivo:
+Compilar una descripcion informal en un perfil estructurado.
+
+Componentes:
+
+- `instruction_compiler_service.py`
+- Salida Pydantic validada:
+  - `system_instructions`
+  - `behavior_examples`
+  - `style_rules`
+  - `domain_constraints`
+  - `retrieval_profile`
+- Reintentos con backoff.
+- Validacion de que haya 10-15 ejemplos utiles.
+
+Verificacion:
+
+- Test unitario con un agente tecnico.
+- La salida debe ser JSON valido.
+- No guardar perfiles incompletos.
+
+---
+
+### Fase 4: Provider Router, API Key Pools y Anti-429
+
+Objetivo:
+Crear un motor comun para enrutar inferencias a Google, Groq y OpenRouter.
+
+Componentes:
+
+- `provider_router_service.py`
+- `provider_key_pool_service.py`
+- `cooldown_service.py`
+- Tabla `provider_keys`.
+- Tabla `provider_usage_events`.
+- Fallback por tier:
+  - `pro`
+  - `balanced`
+  - `fast`
+
+Verificacion:
+
+- Simular 429 en una key.
+- Marcar cooldown.
+- Reintentar con otro provider/key.
+- Registrar uso y error.
+
+---
+
+### Fase 5: RAG por Agente con Subida de Archivos
+
+Objetivo:
+Permitir subir documentos y consultarlos desde el agente.
+
+Componentes:
+
+- `platform_knowledge.py`
+- `platform_rag_service.py`
+- Tablas `agent_files` y `agent_knowledge`.
+- Extraccion PDF/TXT/MD.
+- Chunking.
+- `tsvector` e indices.
+
+Verificacion:
+
+- Subir PDF de prueba.
+- Comprobar chunks.
+- Consulta recupera contexto correcto.
+
+---
+
+### Fase 6: Chat con Agentes Personalizados
+
+Objetivo:
+Unir agente + instruction pack + RAG + provider router.
+
+Componentes:
+
+- `platform_chat.py`
+- `chat_sessions`
+- `chat_messages`
+- Inyeccion de contexto.
+- Cache opcional.
+
+Verificacion:
+
+- Chatear con agente privado.
+- Usar RAG si hay documentos.
+- Fallar de forma controlada si no hay claves disponibles.
+
+---
+
+### Fase 7: Cache, Feedback y Versionado de Evolucion
+
+Objetivo:
+Ahorrar tokens y permitir mejora controlada.
+
+Componentes:
+
+- `agent_cache`.
+- Feedback +1/-1.
+- Re-sintesis manual o asistida, nunca silenciosa.
+- Nueva version del agente para cada cambio importante.
+
+Verificacion:
+
+- Pregunta repetida se sirve desde cache.
+- Feedback negativo crea propuesta de nueva version, no modifica el agente activo sin aprobacion.
+
+---
+
+### Fase 8: Arzor Round Table
+
+Objetivo:
+Orquestar debates multi-agente.
+
+Componentes:
+
+- `round_table.py`
+- `round_table_service.py`
+- Cola secuencial o turnos controlados.
+- Cooldown entre turnos.
+- Limite de tokens por ronda.
+
+Verificacion:
+
+- Debate entre Programador y Tester.
+- Output coherente.
+- Sin llamadas simultaneas que saturen cuotas.
+
+---
+
+### Fase 9: UI Platform
+
+Objetivo:
+Construir `/platform` como interfaz multiusuario.
+
+Componentes:
+
+- Login/register.
+- Biblioteca de agentes.
+- Editor de agente.
+- Subida de documentos.
+- Chat por agente.
+- Vista de cooldown.
+- Panel de provider keys.
+
+Verificacion:
+
+- Flujo completo: registrarse, crear agente, subir documento, chatear.
+
+---
+
+### Fase 10: Arzor DevCrew CLI
+
+Objetivo:
+CLI local para planificar y escribir proyectos usando agentes del servidor.
+
+Componentes:
+
+- `cli/tenzor_crew.py`
+- `/platform/crew/plan`
+- `/platform/crew/write`
+- Backoff local.
+- Debouncer cliente-servidor.
+- Contexto por stubs.
+
+Verificacion:
+
+- Generar microservicio FastAPI completo.
+- Crear estructura de archivos.
+- No saturar proveedores.
+
+---
+
+## Instruccion de Arranque Rapido
+
+Cuando el usuario diga:
+
 **"pon el plan implementation_plan.md de la raiz sobre tenzor platform en marcha"**
 
-El agente de turno debe proceder de la siguiente manera de forma inmediata y autónoma:
-1. **Inicializar la Tarea**: Crear el archivo `task.md` en la carpeta de la conversación (copiando el plan base estructurado) para llevar el control de tareas en progreso `[/]` y completadas `[x]`.
-2. **Crear Scripts y Estructura**: Iniciar la **Fase 1**, configurando las tablas necesarias en Supabase y creando el esqueleto de autenticación en FastAPI.
-3. **Reportar Avance**: No detenerse a preguntar a menos que ocurra un error fatal o un cambio crítico de diseño no contemplado. Ejecutar fase por fase informando periódicamente del avance al usuario.
+El agente debe:
+
+1. Crear `task.md` con checklist por fases.
+2. Empezar por Fase 0.
+3. Generar migraciones SQL, pero no ejecutarlas automaticamente en Supabase.
+4. Pedir confirmacion antes de cualquier cambio manual en Supabase o accion irreversible.
+5. Implementar fase por fase con tests.
+6. Mantener Tenzor AI actual funcionando.
