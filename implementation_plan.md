@@ -1,29 +1,45 @@
 # Plan de Implementación: Tenzor AI Platform
 
-Este plan detalla la evolución de **Tenzor** para albergar una subplataforma llamada **Tenzor AI Platform** (o **Tenzor Multi AIs Platform**), un entorno donde cualquier usuario puede registrarse con usuario/contraseña, especializar una IA con instrucciones y documentos propios (PDFs, TXT, MD), compartirla en una biblioteca pública y organizar debates colaborativos (**Tenzor Round Table**) sin costes.
+Este plan detalla la evolución de **Tenzor** para albergar una subplataforma llamada **Tenzor AI Platform** (o **Tenzor Multi AIs Platform**), un entorno donde cualquier usuario puede registrarse con usuario/contraseña, especializar una IA con instrucciones y documentos propios (PDFs, TXT, MD), compartirla en una biblioteca pública y organizar debates colaborativos (**Tenzor Round Table**) sin costes de infraestructura centralizada.
 
 ---
 
 ## 💡 Concepto de Especialización Híbrida y Serverless
 
 Para dar soporte a múltiples usuarios sin consumir tus créditos de Google Cloud en GPUs encendidas 24/7 y evitar bloqueos por rate-limit (429), utilizaremos:
+
 1. **Arquitectura BYOK (Bring Your Own Key) Descentralizada**:
    - Los usuarios guardan de forma segura sus propias API Keys de Gemini y Groq desde el modal de Ajustes en el frontend (almacenadas en `localStorage` por privacidad).
    - Estas llaves se envían de forma dinámica en las cabeceras de cada petición al backend.
-   - Toda la inferencia pesada (chats de agentes, debates de mesas redondas y emulaciones de tuning) se consume directamente contra las cuotas gratuitas e individuales de cada usuario, evitando costes y centralización de rate-limits en tu servidor.
-2. **Adaptive Instruction Compilation**: Un modelo avanzado (`gemini-2.5-pro`) destila y optimiza la descripción que da el usuario para generar un *System Prompt* estructurado con ejemplos few-shot específicos del rol (cocina, baile, IT, etc.).
+   - Toda la inferencia pesada (chats de agentes, debates de mesas redondas y emulaciones de tuning) se consume directamente contra las cuotas individuales de cada usuario, evitando costes y centralización de rate-limits en tu servidor.
+
+2. **Adaptive Instruction Compilation (Motor de Emulated Fine-Tuning de Alta Capacidad)**:
+   - **Programa Potente, Optimizado y Capaz**: El motor de síntesis de personalidad de cada agente debe ser sumamente robusto y estar bien optimizado. Estará basado en `gemini-2.5-pro` (o modelo avanzado equivalente en modo de salida estructurada JSON).
+   - **Destilación de Directrices y Matriz Sintética**: A partir de la descripción informal del usuario, este programa destila de forma rápida y capaz las directrices maestras (`system_instructions`) y compila una matriz de pesos sintéticos (`pseudo_lora_weights` JSONB) con 10-15 ejemplos de interacción de pocas pasadas (*few-shot Q&A*) de altísima calidad y coherencia lógica.
+   - **Esquema de Validación Estricta**: Se implementarán validadores semánticos y de esquema (Pydantic / Structured Outputs). Si el JSON resultante está incompleto, mal estructurado o carece de la profundidad técnica requerida, el backend realizará reintentos automáticos (máximo 3) ajustando la temperatura para asegurar un resultado potente y funcional que aporte valor real al comportamiento del agente.
+   - **Optimización de Parsing**: Evitaremos overheads innecesarios utilizando parsers de JSON ultrarrápidos y cargando el contexto compilado en caché de memoria para peticiones subsiguientes.
+
 3. **Database-backed RAG (Subida de Archivos)**:
    - El usuario sube PDFs o archivos de texto plano desde la interfaz.
    - El backend extrae el texto, lo divide en fragmentos y los inserta en Supabase (`agent_knowledge`).
    - Usamos la búsqueda de texto nativa de Postgres (`@@ to_tsquery`) para recuperar los fragmentos relevantes.
+
 4. **Enrutamiento Dinámico de Modelos**:
    - **Generales / Ocio**: `gemini-2.5-flash-lite` (gratuito, límites de cuota amplios).
    - **Lógica / Programación / Rol Técnico**: `llama-3.3-70b-instruct` o `gemini-2.5-pro`.
-5. **Resiliencia ante Errores 429 (Límites de API)**:
-   - **Cola de Inferencia Asíncrona (`asyncio.Queue`)**: Todas las peticiones de debates y chats grupales se procesan secuencialmente a través de un limitador de tasa de peticiones del lado del servidor para evitar ráfagas simultáneas.
-   - **Pool Rotativo de Keys con Estado de Cooldown**: El backend rotará a través de múltiples API Keys gratuitas. Si una clave recibe un error 429, se marca "on cooldown" por 60 segundos y se usa la siguiente.
-   - **Compresión de Contexto**: En debates multigente, solo pasamos la pregunta base del usuario y los dos últimos turnos de conversación de forma deslizable para minimizar el consumo de tokens y maximizar la velocidad.
 
+5. **Resiliencia ante Errores 429 (Control Inteligente de Límites de API)**:
+   - **Aislamiento por Clave (Multi-User Isolation)**: Dado que las API Keys de los usuarios son individuales, el backend aísla los límites por usuario. Si el usuario A satura su cuota y recibe un error 429, solo se pausarán sus peticiones individuales, manteniendo el servicio 100% disponible para el resto de usuarios en la plataforma.
+   - **Detección Activa de 429 y Cálculo de Cooldown**: El backend interceptará los errores 429 de las APIs de Groq y Gemini. Extraerá el tiempo de espera de la cabecera `Retry-After` de la respuesta, o en su defecto aplicará un retroceso exponencial dinámico (comenzando en 30 segundos, duplicándose en fallos consecutivos).
+   - **Pausa Elegante y Asíncrona**: En lugar de hacer fallar la sesión de chat o colgar el hilo del backend, el servidor detendrá de forma no bloqueante la ejecución mediante `asyncio.sleep` y devolverá un código de estado intermedio controlado al frontend.
+   - **Visual Cooldown Grace Period (UI/UX Sci-Fi)**: Al recibir el evento de cooldown, el frontend deshabilitará el cuadro de texto del chat y mostrará una interfaz visual animada con temática sci-fi (por ejemplo, "Enfriamiento del Núcleo Cuántico en progreso...") con un temporizador dinámico. El chat se desbloqueará automáticamente al terminar el periodo, previniendo el spam del usuario que empeoraría el rate-limit.
+   - **Cola de Inferencia Asíncrona con Prioridades (`asyncio.Queue`)**: Organiza de manera secuencial y ordenada las peticiones de debates en Mesas Redondas o chats grupales, evitando ráfagas y picos de tráfico simultáneos sobre un mismo token de usuario.
+   - **Compresión Dinámica de Contexto**: En debates multigente, solo pasamos la pregunta base del usuario y los dos últimos turnos de conversación de forma deslizable para minimizar el consumo de tokens y maximizar la velocidad.
+   - **Graceful Fallbacks de Clave**: Si el usuario configura múltiples API keys de fallback, o si el sistema detecta que el modelo premium está en cooldown prolongado, se le ofrecerá al usuario degradar temporalmente de forma elegante al modelo `gemini-2.5-flash-lite` con un aviso informativo.
+
+---
+
+## 🛠️ Esquema de Base de Datos (Supabase)
 
 ```sql
 -- Perfiles de usuario vinculados al Auth clásico
@@ -103,13 +119,13 @@ Para evitar la saturación de código y garantizar la máxima calidad, el proyec
   - Validar registro y login de usuarios de prueba.
   - Asegurar que las llamadas a base de datos se aíslen correctamente por `user_id`.
 
-### 📍 Fase 2: El Sintetizador de Agentes (Pseudo-LoRA)
-* **Objetivo**: Programar el backend de creación de IAs que toma la descripción informal del usuario y genera de forma asíncrona la personalidad compilada (`system_instructions`) y la matriz de pesos sintéticos (`pseudo_lora_weights` JSONB).
+### 📍 Fase 2: El Sintetizador de Agentes Optimizado (Pseudo-LoRA Engine)
+* **Objetivo**: Programar el motor de compilación de agentes robusto y potente. Recibe la descripción informal y de forma asíncrona genera el set de directrices y la matriz JSONB (`pseudo_lora_weights`) usando Pydantic, reintentos en caliente y validación lógica.
 * **Componentes**:
   - `app/routers/platform_agents.py` [NEW] (Ruta `POST /platform/agents`).
-  - Lógica de Meta-Prompting con `gemini-2.5-pro` para generar el JSONB de ejemplos Q&A de interacción.
+  - Lógica de Meta-Prompting avanzado en `gemini-2.5-pro` estructurado, con control de temperatura.
 * **Verificación**:
-  - Test unitario: Crear un agente y verificar que el campo `pseudo_lora_weights` contiene un array válido con 10 ejemplos de Q&A consistentes.
+  - Test unitario: Crear un agente técnico y verificar que la matriz `pseudo_lora_weights` contiene de 10 a 15 ejemplos Q&A válidos, con alta consistencia de comportamiento y formato correcto.
 
 ### 📍 Fase 3: RAG con Subida de Archivos y Mapa Sináptico
 * **Objetivo**: Integrar la subida de PDFs/Textos desde la UI, extraer el contenido, segmentar y construir el grafo de relaciones conceptuales en la base de datos.
@@ -120,19 +136,20 @@ Para evitar la saturación de código y garantizar la máxima calidad, el proyec
 * **Verificación**:
   - Subir un PDF de prueba de 10 páginas, verificar que se guarda indexado en Supabase y que las búsquedas a través del chat recuperan los chunks correspondientes.
 
-### 📍 Fase 4: Chat Personalizado con Inferencia de Atención Dinámica
-* **Objetivo**: Actualizar el motor de chat para agentes personalizados, calculando la relevancia de los pesos sintéticos de comportamiento y los chunks de RAG para inyectarlos en el prompt en tiempo real.
+### 📍 Fase 4: Chat con Control Inteligente de 429 y Fallback
+* **Objetivo**: Actualizar el motor de chat para soportar agentes personalizados, ordenando de forma rápida en memoria los pesos Pseudo-LoRA, e implementando el middleware detector de 429 con cooldown dinámico y aislamiento de cuotas.
 * **Componentes**:
   - `app/routers/platform_chat.py` [NEW] (Ruta `/platform/chat`).
-  - Lógica de ordenamiento semántico rápido en memoria para los pesos Pseudo-LoRA.
+  - Modificación de `app/services/ai_service.py` [MODIFY] para recibir API Keys del usuario en cada petición y enrutar la inferencia.
+  - Capturador de excepciones de API (Groq y Gemini) para capturar 429 y reaccionar devolviendo códigos de control.
 * **Verificación**:
-  - Realizar 10 preguntas a un agente especializado en cocina y certificar que todas sus respuestas contienen el tono y formato dictado por los ejemplos de su matriz sintética.
+  - Test de stress: Forzar llamadas consecutivas rápidas simulando error 429 en una clave, y verificar que el backend devuelve un evento de cooldown estructurado (`status: "cooldown"`, `retry_after: N`) sin romper el contexto del chat.
 
 ### 📍 Fase 5: Tenzor Round Table (Debates de Agentes)
 * **Objetivo**: Diseñar la lógica de orquestación de discusiones grupales.
 * **Componentes**:
   - `app/routers/round_table.py` [NEW]
-  - Bucle secuencial de inferencia de debates: Agente A responde -> Agente B recibe la respuesta previa y la analiza -> Agente C consolida.
+  - Bucle secuencial de inferencia de debates con cola asíncrona (`asyncio.Queue`) para evitar saturación de 429 en turnos consecutivos.
 * **Verificación**:
   - Iniciar una Mesa Redonda con un Programador y un Tester sobre un fragmento de código, validando que el output final sea una conversación coherente entre ambos agentes.
 
@@ -144,14 +161,13 @@ Para evitar la saturación de código y garantizar la máxima calidad, el proyec
 * **Verificación**:
   - Enviar una pregunta idéntica dos veces. Verificar mediante los logs del servidor que la segunda llamada se sirve directamente desde la base de datos consumiendo 0 tokens de API.
 
-### 📍 Fase 7: Interfaz Visual "Neural Sandbox Console" y Pool de Keys
-* **Objetivo**: Diseñar y maquetar la web en `/platform` (`platform.html`, CSS, JS) con temática Sci-Fi, el lienzo animado del Mapa Sináptico en Canvas, las Salas de Debate y activar la rotación de API Keys en el backend.
-* **Componentes**:
-  - Vista del panel de control de agentes (Studio & Marketplace).
-  - Canvas dinámico en JS para renderizado de grafos conceptuales mediante fuerzas físicas.
-  - Implementación del pool rotatorio de API keys en `ai_service.py` con control de errores 429.
+### 📍 Fase 7: Interfaz Visual "Neural Sandbox Console" y UX Antirruido
+* **Objetivo**: Diseñar y maquetar la interfaz web en `/platform` (`platform.html`, CSS, JS) con estilo visual Sci-Fi premium, Canvas para el Mapa Sináptico y los controles del Pool de Keys.
+* **UX Anti-429**:
+  - Desactivación y bloqueo visual en chat al recibir eventos de cooldown.
+  - Cuenta atrás sci-fi en tiempo real animada en el área del prompt.
 * **Verificación**:
-  - Test de estrés: 20 peticiones concurrentes para forzar límites y confirmar que la rotación de claves mantiene el servicio activo sin fallar.
+  - Ejecutar múltiples usuarios simultáneos, bloquear a uno por límite de cuota (429 simulado) y certificar que la interfaz de dicho usuario entra en pausa visual elegante mientras que el resto de usuarios chatea normalmente.
 
 ### 📍 Fase 8: Tenzor DevCrew CLI (Desarrollo Local Autónomo) [Fase 2 del Proyecto]
 * **Objetivo**: Desarrollar la herramienta de terminal para la creación física de proyectos locales guiada por debates multi-agente en el servidor, con control estricto de cuotas para evitar errores 429.
@@ -165,3 +181,14 @@ Para evitar la saturación de código y garantizar la máxima calidad, el proyec
 * **Verificación**:
   - Ejecutar el CLI local para generar un microservicio completo (FastAPI + base de datos) y certificar que escribe correctamente la estructura de directorios y los archivos funcionales sin disparar errores 429.
 
+---
+
+## 🚀 Instrucción de Arranque Rápido para el Agente
+
+Cuando el usuario dé la orden directa:
+**"pon el plan implementation_plan.md de la raiz sobre tenzor platform en marcha"**
+
+El agente de turno debe proceder de la siguiente manera de forma inmediata y autónoma:
+1. **Inicializar la Tarea**: Crear el archivo `task.md` en la carpeta de la conversación (copiando el plan base estructurado) para llevar el control de tareas en progreso `[/]` y completadas `[x]`.
+2. **Crear Scripts y Estructura**: Iniciar la **Fase 1**, configurando las tablas necesarias en Supabase y creando el esqueleto de autenticación en FastAPI.
+3. **Reportar Avance**: No detenerse a preguntar a menos que ocurra un error fatal o un cambio crítico de diseño no contemplado. Ejecutar fase por fase informando periódicamente del avance al usuario.
