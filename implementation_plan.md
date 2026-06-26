@@ -477,7 +477,7 @@ Verificacion:
 
 ---
 
-### Fase 10: Arzor DevCrew CLI
+### Fase 10: Arzor DevCrew CLI Solo accedder a esta fase tras completar el correcto funcionamiento de las anteriores
 
 Objetivo:
 CLI local para planificar y escribir proyectos usando agentes del servidor.
