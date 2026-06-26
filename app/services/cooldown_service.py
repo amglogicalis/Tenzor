@@ -144,11 +144,11 @@ def _calculate_backoff(
     """
     if override_seconds and override_seconds > 0:
         # Respetar el Retry-After del provider + jitter pequeño
-        return min(override_seconds * random.uniform(1.0, 1.3), 900.0)
+        return min(override_seconds * random.uniform(1.0, 1.2), 180.0)
 
-    exponent = min(consecutive - 1, 6)   # cap en 2^6 = 64
-    backoff = base * (2 ** exponent) * random.uniform(0.5, 1.5)
-    return max(10.0, min(backoff, 900.0))
+    exponent = min(consecutive - 1, 4)   # cap en 2^4 = 16
+    backoff = base * (2 ** exponent) * random.uniform(0.5, 1.2)
+    return max(5.0, min(backoff, 180.0))
 
 
 # ─── Servicio principal ────────────────────────────────────────────────────────

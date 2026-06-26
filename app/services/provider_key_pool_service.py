@@ -54,8 +54,8 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
     },
     "google": {
         "fast":     "gemini-2.0-flash-lite",
-        "balanced": "gemini-2.5-flash",
-        "pro":      "gemini-2.5-pro",
+        "balanced": "gemini-2.0-flash",          # Flash es más rápido y generoso que 2.5-flash
+        "pro":      "gemini-2.5-flash",           # 2.5-flash para pro (buen balance calidad/coste)
     },
     "openrouter": {
         "fast":     "meta-llama/llama-3.1-8b-instruct:free",
@@ -66,8 +66,8 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
 
 # Orden de providers por tier (primary → fallback → last-resort)
 PROVIDER_ORDER: Dict[str, List[str]] = {
-    "fast":     ["groq", "openrouter", "google"],
-    "balanced": ["groq", "google", "openrouter"],
+    "fast":     ["groq", "google", "openrouter"],
+    "balanced": ["google", "groq", "openrouter"],   # Gemini primero: más generoso RPM/TPM
     "pro":      ["google", "openrouter", "groq"],
 }
 

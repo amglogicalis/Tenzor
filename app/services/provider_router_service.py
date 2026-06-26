@@ -469,8 +469,22 @@ class ProviderRouterService:
                     logger.error(f"Router: error inesperado en {provider}/{key.key_id}: {e}")
                     break
 
-        # Todos los providers fallaron
+        # Todos los providers fallaron — log detallado para diagnóstico
         providers_tried = list({a.provider for a in attempts})
+        rate_limits = [a for a in attempts if a.error_code == 429]
+        auth_errors  = [a for a in attempts if a.error_code in (401, 403)]
+
+        logger.error(
+            f"Router: ❌ todos los providers fallaron. "
+            f"Intentos: {len(attempts)} | 429s: {len(rate_limits)} | "
+            f"Auth errors: {len(auth_errors)} | "
+            f"Providers: {providers_tried}"
+        )
+        for a in attempts:
+            logger.error(
+                f"  → {a.provider}/{a.model} [{a.error_code}] retry_after={a.retry_after} — {a.error_msg[:120]}"
+            )
+
         raise InferenceError(
             f"Todos los providers fallaron ({', '.join(providers_tried)}). "
             f"{len(attempts)} intentos realizados.",

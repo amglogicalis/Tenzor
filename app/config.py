@@ -71,4 +71,5 @@ ARZOR_ROUND_TABLE_MAX_AGENTS = int(os.getenv("ARZOR_ROUND_TABLE_MAX_AGENTS", "5"
 ARZOR_ROUND_TABLE_MAX_TURNS = int(os.getenv("ARZOR_ROUND_TABLE_MAX_TURNS", "10"))
 
 # Cooldown base en segundos cuando se recibe un 429
-ARZOR_COOLDOWN_BASE_SECONDS = int(os.getenv("ARZOR_COOLDOWN_BASE_SECONDS", "60"))
+# Default 15s: con 3 providers el backoff corto es preferible para recuperarse rápido
+ARZOR_COOLDOWN_BASE_SECONDS = int(os.getenv("ARZOR_COOLDOWN_BASE_SECONDS", "15"))

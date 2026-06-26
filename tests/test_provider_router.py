@@ -355,17 +355,17 @@ class TestProviderRouter:
         assert result.provider == "google"
 
     def test_fallback_on_429(self):
-        """Si groq da 429, debe intentar google como fallback."""
-        pool = self._make_fresh_pool("groq", "google")
+        """Si google da 429, debe intentar groq como fallback (balanced: google→groq→openrouter)."""
+        pool = self._make_fresh_pool("google", "groq")
         router = ProviderRouterService()
-        google_result = make_result("google", "gemini-2.5-flash")
+        groq_result = make_result("groq", "llama-3.3-70b-versatile")
         call_count = {"groq": 0, "google": 0}
 
         def mock_dispatch(provider, model, messages, api_key, system_prompt, temperature, max_tokens):
             call_count[provider] = call_count.get(provider, 0) + 1
-            if provider == "groq":
+            if provider == "google":
                 raise _RateLimitError(429, "rate limited", retry_after=30)
-            return google_result
+            return groq_result
 
         p1, p2, p3 = self._patches(pool)
         with p1, p2, p3, patch.object(router, "_dispatch", side_effect=mock_dispatch):
@@ -374,8 +374,8 @@ class TestProviderRouter:
                 tier="balanced",
             )
 
-        assert result.provider == "google"
-        assert call_count["groq"] >= 1
+        assert result.provider == "groq"
+        assert call_count["google"] >= 1
 
     def test_fallback_on_503(self):
         """Si groq da 503 (servicio caído), debe pasar directo al siguiente provider."""
@@ -419,15 +419,15 @@ class TestProviderRouter:
         assert "attempts" in error_dict
 
     def test_auth_error_skips_provider(self):
-        """Un 401 en groq debe marcar la key como inválida y pasar al siguiente."""
-        pool = self._make_fresh_pool("groq", "google")
+        """Un 401 en google debe marcar la key como inválida y pasar al siguiente (groq)."""
+        pool = self._make_fresh_pool("google", "groq")
         router = ProviderRouterService()
-        google_result = make_result("google")
+        groq_result = make_result("groq")
 
         def mock_dispatch(provider, model, messages, api_key, system_prompt, temperature, max_tokens):
-            if provider == "groq":
+            if provider == "google":
                 raise _AuthError(401, "invalid key")
-            return google_result
+            return groq_result
 
         p1, p2, p3 = self._patches(pool)
         with p1, p2, p3, patch.object(router, "_dispatch", side_effect=mock_dispatch):
@@ -435,10 +435,10 @@ class TestProviderRouter:
                 messages=[{"role": "user", "content": "Test"}],
                 tier="balanced",
             )
-        assert result.provider == "google"
-        # Verificar que la key de groq fue marcada como inválida en el cooldown fresco
-        groq_key_id = [k for k in pool._keys if "groq" in k][0]
-        assert pool._fresh_cooldown._states[groq_key_id].is_permanently_invalid is True
+        assert result.provider == "groq"
+        # Verificar que la key de google fue marcada como inválida en el cooldown fresco
+        google_key_id = [k for k in pool._keys if "google" in k][0]
+        assert pool._fresh_cooldown._states[google_key_id].is_permanently_invalid is True
 
     def test_tokens_registered_on_success(self):
         """Los tokens in/out se registran correctamente en el cooldown."""
