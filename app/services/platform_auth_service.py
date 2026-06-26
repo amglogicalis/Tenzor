@@ -19,15 +19,27 @@ class PlatformAuthService:
 
     def __init__(self):
         self.supabase: Optional[Client] = None
+        self._admin: Optional[Client] = None  # service_role: bypass RLS
 
         if config.SUPABASE_URL and config.SUPABASE_KEY:
             try:
                 self.supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-                logger.info("PlatformAuthService: cliente Supabase inicializado.")
+                logger.info("PlatformAuthService: cliente Supabase (anon) inicializado.")
             except Exception as e:
                 logger.error(f"PlatformAuthService: error al inicializar Supabase: {e}")
         else:
             logger.warning("PlatformAuthService: Supabase no configurado. Auth de plataforma inoperativa.")
+
+        # Cliente admin para escribir profiles sin restricciones de RLS
+        if config.SUPABASE_URL and config.SUPABASE_SERVICE_KEY:
+            try:
+                self._admin = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
+                logger.info("PlatformAuthService: cliente admin (service_role) inicializado.")
+            except Exception as e:
+                logger.warning(f"PlatformAuthService: no se pudo crear cliente admin: {e}")
+                self._admin = self.supabase  # fallback al anon
+        else:
+            self._admin = self.supabase  # fallback
 
     # ─── Registro ──────────────────────────────────────────────────────────────
 
@@ -66,16 +78,16 @@ class PlatformAuthService:
         user_id = user.id
         session = auth_response.session
 
-        # 3. Insertar perfil en la tabla `profiles`
+        # 3. Insertar perfil en la tabla `profiles` usando service_role (bypass RLS)
+        admin_client = self._admin or self.supabase
         try:
-            self.supabase.table("profiles").insert({
+            admin_client.table("profiles").insert({
                 "id": user_id,
                 "username": username,
                 "display_name": display_name or username,
             }).execute()
         except Exception as e:
             logger.error(f"Error insertando perfil para user {user_id}: {e}")
-            # El usuario fue creado en Auth pero el perfil falló. Log crítico.
             raise ValueError("Cuenta creada pero el perfil no pudo guardarse. Contacta al soporte.")
 
         access_token = session.access_token if session else ""
