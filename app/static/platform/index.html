@@ -878,14 +878,28 @@ async function doLogin() {
 async function doRegister() {
   hideAuthError();
   try {
-    await api('POST', '/platform/auth/register', {
+    const data = await api('POST', '/platform/auth/register', {
       email: document.getElementById('reg-email').value,
       username: document.getElementById('reg-username').value,
       display_name: document.getElementById('reg-displayname').value,
       password: document.getElementById('reg-password').value,
     });
-    toast('Cuenta creada. Ahora inicia sesión.', 'success');
-    switchAuthTab('login');
+
+    if (data && data.email_confirmation_required) {
+      // Supabase requiere confirmación de email
+      document.getElementById('auth-error').style.background = 'rgba(16,185,129,0.12)';
+      document.getElementById('auth-error').style.borderColor = 'rgba(16,185,129,0.3)';
+      document.getElementById('auth-error').style.color = '#6ee7b7';
+      showAuthError('📧 ¡Cuenta creada! Revisa tu email y confirma tu dirección antes de iniciar sesión. Revisa también la carpeta de spam.');
+      // Limpiar formulario
+      document.getElementById('reg-email').value = '';
+      document.getElementById('reg-password').value = '';
+      document.getElementById('reg-username').value = '';
+      document.getElementById('reg-displayname').value = '';
+    } else {
+      toast('Cuenta creada. Ahora inicia sesión.', 'success');
+      switchAuthTab('login');
+    }
   } catch(e) { showAuthError(e.message); }
 }
 
@@ -1025,7 +1039,9 @@ async function deleteAgent(agentId, name) {
 async function loadLibrary() {
   const category = document.getElementById('lib-category').value;
   try {
-    const data = await api('GET', `/platform/agents/public?${category ? `category=${category}` : ''}`);
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    const data = await api('GET', `/platform/agents/library?${params}`);
     renderAgentGrid('library-grid', data?.agents || []);
   } catch(e) { toast(e.message, 'error'); }
 }

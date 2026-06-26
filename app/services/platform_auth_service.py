@@ -91,6 +91,7 @@ class PlatformAuthService:
             raise ValueError("Cuenta creada pero el perfil no pudo guardarse. Contacta al soporte.")
 
         access_token = session.access_token if session else ""
+        email_pending = session is None  # Supabase requiere confirmación de email
 
         return {
             "access_token": access_token,
@@ -98,6 +99,7 @@ class PlatformAuthService:
             "user_id": user_id,
             "username": username,
             "display_name": display_name or username,
+            "email_confirmation_required": email_pending,
         }
 
     # ─── Login ─────────────────────────────────────────────────────────────────
@@ -115,7 +117,13 @@ class PlatformAuthService:
                 "password": password,
             })
         except Exception as e:
+            err_str = str(e).lower()
             logger.warning(f"Fallo de login para {email}: {e}")
+            if "email not confirmed" in err_str or "email_not_confirmed" in err_str:
+                raise ValueError(
+                    "Debes confirmar tu email antes de iniciar sesión. "
+                    "Revisa tu bandeja de entrada (y spam)."
+                )
             raise ValueError("Email o contraseña incorrectos.")
 
         user = auth_response.user

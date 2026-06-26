@@ -5,8 +5,9 @@ Fase 2: operaciones completas contra Supabase con RLS.
 """
 import logging
 from typing import Optional, Dict, Any, List
-from supabase import create_client, Client
+from supabase import Client
 from app import config
+from app.db import supabase_admin
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +21,13 @@ class AgentService:
     """
 
     def __init__(self):
-        self.supabase: Optional[Client] = None
-
-        if config.SUPABASE_URL and config.SUPABASE_KEY:
-            try:
-                self.supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-                logger.info("AgentService: cliente Supabase inicializado.")
-            except Exception as e:
-                logger.error(f"AgentService: error al inicializar Supabase: {e}")
-        else:
+        # Usar siempre el cliente admin (service_role) para bypass de RLS
+        self.supabase: Optional[Client] = supabase_admin
+        if not self.supabase:
             logger.warning("AgentService: Supabase no configurado.")
+        else:
+            logger.info("AgentService: usando cliente admin (service_role).")
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # CREAR AGENTE
