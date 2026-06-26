@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arzor AIs Platform</title>
+  <meta name="description" content="Crea, personaliza y despliega agentes de IA especializados con la plataforma Arzor." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Tokens ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-base:    #0a0b0f;
+      --bg-surface: #11131a;
+      --bg-card:    #161922;
+      --bg-hover:   #1e2230;
+      --border:     rgba(255,255,255,0.06);
+      --border-active: rgba(124,58,237,0.5);
+      --primary:    #7c3aed;
+      --primary-light: #a855f7;
+      --primary-glow: rgba(124,58,237,0.2);
+      --accent:     #06b6d4;
+      --success:    #10b981;
+      --warning:    #f59e0b;
+      --error:      #ef4444;
+      --text-1:     #f1f5f9;
+      --text-2:     #94a3b8;
+      --text-3:     #475569;
+      --radius-sm:  8px;
+      --radius-md:  12px;
+      --radius-lg:  16px;
+      --radius-xl:  24px;
+      --shadow-sm:  0 2px 8px rgba(0,0,0,0.3);
+      --shadow-md:  0 8px 24px rgba(0,0,0,0.4);
+      --shadow-glow: 0 0 32px rgba(124,58,237,0.15);
+      --sidebar-w:  240px;
+      --topbar-h:   64px;
+      --transition: 0.2s ease;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-base);
+      color: var(--text-1);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font-family: inherit; border: none; background: none; }
+    input, textarea, select {
+      font-family: inherit;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-1);
+      padding: 10px 14px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color var(--transition);
+      width: 100%;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
+    /* ── Auth Screen ─────────────────────────────────────────────────────── */
+    #auth-screen {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 50% 0%, rgba(124,58,237,0.12) 0%, transparent 60%),
+                  var(--bg-base);
+    }
+    .auth-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: var(--shadow-glow), var(--shadow-md);
+    }
+    .auth-logo {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 32px;
+    }
+    .auth-logo-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .auth-logo-text { font-size: 22px; font-weight: 700; }
+    .auth-logo-text span { color: var(--primary-light); }
+    .auth-tabs { display: flex; gap: 4px; background: var(--bg-card); border-radius: var(--radius-sm); padding: 4px; margin-bottom: 28px; }
+    .auth-tab {
+      flex: 1; padding: 8px; border-radius: 6px; font-size: 14px;
+      font-weight: 500; color: var(--text-2); transition: all var(--transition);
+    }
+    .auth-tab.active { background: var(--primary); color: white; }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
+    .btn-primary {
+      width: 100%; padding: 12px; border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: white; font-size: 15px; font-weight: 600;
+      transition: opacity var(--transition), transform var(--transition);
+      margin-top: 8px;
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .auth-error {
+      background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
+      border-radius: var(--radius-sm); padding: 10px 14px;
+      font-size: 13px; color: #fca5a5; margin-bottom: 16px; display: none;
+    }
+
+    /* ── App Layout ──────────────────────────────────────────────────────── */
+    #app { display: none; }
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: var(--topbar-h);
+      background: rgba(10,11,15,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 24px 0 calc(var(--sidebar-w) + 24px);
+      z-index: 100;
+    }
+    .topbar-title { font-size: 18px; font-weight: 600; flex: 1; }
+    .topbar-title span { color: var(--primary-light); }
+    .topbar-user {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 99px; padding: 6px 14px 6px 6px;
+      cursor: pointer; transition: background var(--transition);
+    }
+    .topbar-user:hover { background: var(--bg-hover); }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700;
+    }
+    .topbar-username { font-size: 14px; font-weight: 500; }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    .sidebar {
+      position: fixed; left: 0; top: 0; bottom: 0;
+      width: var(--sidebar-w);
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 20px 12px;
+      z-index: 101;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 10px;
+      padding: 4px 8px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-logo-icon {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .sidebar-logo-text { font-size: 17px; font-weight: 700; }
+    .sidebar-logo-text span { color: var(--primary-light); }
+    .nav-section-label {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+      color: var(--text-3); text-transform: uppercase;
+      padding: 4px 8px; margin-bottom: 4px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 500; color: var(--text-2);
+      cursor: pointer; transition: all var(--transition); margin-bottom: 2px;
+      border: 1px solid transparent;
+    }
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-1); }
+    .nav-item.active {
+      background: var(--primary-glow);
+      border-color: var(--border-active);
+      color: var(--primary-light);
+    }
+    .nav-item-icon { font-size: 17px; width: 20px; text-align: center; }
+    .sidebar-spacer { flex: 1; }
+    .sidebar-footer { padding: 12px 8px 0; border-top: 1px solid var(--border); }
+    .logout-btn {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 500; color: var(--text-3);
+      cursor: pointer; transition: all var(--transition); width: 100%;
+    }
+    .logout-btn:hover { background: rgba(239,68,68,0.1); color: #fca5a5; }
+
+    /* ── Main Content ─────────────────────────────────────────────────────── */
+    .main-content {
+      margin-left: var(--sidebar-w);
+      margin-top: var(--topbar-h);
+      padding: 32px;
+      min-height: calc(100vh - var(--topbar-h));
+    }
+    .page { display: none; }
+    .page.active { display: block; }
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .page-title { font-size: 24px; font-weight: 700; }
+    .page-subtitle { font-size: 14px; color: var(--text-2); margin-top: 4px; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: all var(--transition); border: 1px solid transparent;
+    }
+    .btn-sm { padding: 7px 14px; font-size: 13px; }
+    .btn-purple {
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: white;
+    }
+    .btn-purple:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(124,58,237,0.3); }
+    .btn-ghost { background: var(--bg-card); border-color: var(--border); color: var(--text-2); }
+    .btn-ghost:hover { background: var(--bg-hover); color: var(--text-1); }
+    .btn-danger { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); color: #fca5a5; }
+    .btn-danger:hover { background: rgba(239,68,68,0.2); }
+
+    /* ── Cards ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      transition: all var(--transition);
+    }
+    .card:hover { border-color: var(--border-active); box-shadow: var(--shadow-glow); }
+
+    /* ── Grid ────────────────────────────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px,1fr)); gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 16px; }
+
+    /* ── Stats Row ───────────────────────────────────────────────────────── */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+    }
+    .stat-label { font-size: 12px; font-weight: 500; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value { font-size: 30px; font-weight: 700; margin-top: 6px; }
+    .stat-value.purple { color: var(--primary-light); }
+    .stat-value.cyan { color: var(--accent); }
+    .stat-value.green { color: var(--success); }
+
+    /* ── Agent Card ──────────────────────────────────────────────────────── */
+    .agent-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex; flex-direction: column; gap: 12px;
+      transition: all var(--transition);
+      cursor: pointer;
+    }
+    .agent-card:hover { border-color: var(--border-active); box-shadow: var(--shadow-glow); transform: translateY(-2px); }
+    .agent-card-header { display: flex; align-items: flex-start; gap: 12px; }
+    .agent-icon {
+      width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .agent-icon.cat-dev    { background: linear-gradient(135deg,#1d4ed8,#3b82f6); }
+    .agent-icon.cat-data   { background: linear-gradient(135deg,#065f46,#10b981); }
+    .agent-icon.cat-ops    { background: linear-gradient(135deg,#78350f,#f59e0b); }
+    .agent-icon.cat-science{ background: linear-gradient(135deg,#7c3aed,#a855f7); }
+    .agent-icon.cat-creative{background: linear-gradient(135deg,#be185d,#ec4899); }
+    .agent-name { font-size: 16px; font-weight: 600; }
+    .agent-desc { font-size: 13px; color: var(--text-2); line-height: 1.5; flex: 1; }
+    .agent-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 500;
+    }
+    .badge-purple { background: rgba(124,58,237,0.15); color: var(--primary-light); border: 1px solid rgba(124,58,237,0.3); }
+    .badge-cyan   { background: rgba(6,182,212,0.12); color: var(--accent); border: 1px solid rgba(6,182,212,0.25); }
+    .badge-green  { background: rgba(16,185,129,0.12); color: var(--success); border: 1px solid rgba(16,185,129,0.25); }
+    .badge-amber  { background: rgba(245,158,11,0.12); color: var(--warning); border: 1px solid rgba(245,158,11,0.25); }
+    .agent-card-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+    /* ── Chat UI ─────────────────────────────────────────────────────────── */
+    .chat-layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; height: calc(100vh - var(--topbar-h) - 80px); }
+    .chat-sidebar {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: hidden;
+    }
+    .chat-sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+    .chat-sidebar-header h3 { font-size: 14px; font-weight: 600; }
+    .session-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .session-item {
+      padding: 10px 12px; border-radius: var(--radius-sm); cursor: pointer;
+      transition: background var(--transition); margin-bottom: 2px;
+    }
+    .session-item:hover { background: var(--bg-hover); }
+    .session-item.active { background: var(--primary-glow); }
+    .session-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .session-date { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+    .chat-main {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: hidden;
+    }
+    .chat-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .message { display: flex; gap: 12px; max-width: 80%; }
+    .message.user { align-self: flex-end; flex-direction: row-reverse; }
+    .message-avatar {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 14px;
+    }
+    .message.user .message-avatar { background: linear-gradient(135deg, var(--primary), var(--primary-light)); }
+    .message.assistant .message-avatar { background: linear-gradient(135deg, var(--accent), #818cf8); }
+    .message-bubble {
+      padding: 12px 16px; border-radius: var(--radius-md); font-size: 14px; line-height: 1.6;
+    }
+    .message.user .message-bubble { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
+    .message.assistant .message-bubble { background: var(--bg-surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .message-meta { font-size: 11px; color: var(--text-3); margin-top: 4px; display: flex; align-items: center; gap: 8px; }
+    .feedback-btn { cursor: pointer; transition: color var(--transition); }
+    .feedback-btn:hover { color: var(--text-1); }
+    .chat-input-area {
+      padding: 16px 20px; border-top: 1px solid var(--border);
+      display: flex; gap: 10px; align-items: flex-end;
+    }
+    .chat-input {
+      flex: 1; resize: none; min-height: 44px; max-height: 160px;
+      padding: 10px 14px; border-radius: var(--radius-md); line-height: 1.5;
+    }
+    .send-btn {
+      width: 44px; height: 44px; border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: white; font-size: 18px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity var(--transition); cursor: pointer;
+    }
+    .send-btn:hover { opacity: 0.85; }
+    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Modal ───────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px); z-index: 200;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+      opacity: 0; pointer-events: none; transition: opacity var(--transition);
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-xl); padding: 32px;
+      width: 100%; max-width: 520px; box-shadow: var(--shadow-md);
+      transform: translateY(20px); transition: transform var(--transition);
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .modal-title { font-size: 18px; font-weight: 700; }
+    .modal-close { font-size: 20px; color: var(--text-3); cursor: pointer; line-height: 1; }
+    .modal-close:hover { color: var(--text-1); }
+    .modal-body { display: flex; flex-direction: column; gap: 16px; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+    /* ── Toast ───────────────────────────────────────────────────────────── */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 12px 16px;
+      font-size: 14px; box-shadow: var(--shadow-md);
+      display: flex; align-items: center; gap: 10px;
+      animation: slideInRight 0.3s ease, fadeOut 0.4s 2.6s ease forwards;
+    }
+    .toast.success { border-color: rgba(16,185,129,0.4); }
+    .toast.error   { border-color: rgba(239,68,68,0.4); }
+    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; transform: translateX(100%); } }
+
+    /* ── Skeleton loader ─────────────────────────────────────────────────── */
+    .skeleton { background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-hover) 50%, var(--bg-card) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: var(--radius-sm); }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ── Empty state ─────────────────────────────────────────────────────── */
+    .empty-state { text-align: center; padding: 60px 20px; }
+    .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+    .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .empty-desc { font-size: 14px; color: var(--text-2); margin-bottom: 24px; }
+
+    /* ── Spinner ─────────────────────────────────────────────────────────── */
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary-light); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Round Table ─────────────────────────────────────────────────────── */
+    .debate-turn { padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border); margin-bottom: 12px; }
+    .debate-turn-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .debate-turn-name { font-size: 13px; font-weight: 600; }
+    .debate-turn-round { font-size: 11px; color: var(--text-3); }
+    .debate-turn-content { font-size: 14px; line-height: 1.6; color: var(--text-2); }
+    .synthesis-box { background: rgba(124,58,237,0.08); border: 1px solid rgba(124,58,237,0.3); border-radius: var(--radius-md); padding: 20px; margin-top: 20px; }
+    .synthesis-label { font-size: 12px; font-weight: 600; color: var(--primary-light); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .synthesis-content { font-size: 14px; line-height: 1.7; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════ AUTH SCREEN ═══════════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🤖</div>
+      <div class="auth-logo-text">Arzor <span>AIs</span></div>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Iniciar sesión</button>
+      <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Registrarse</button>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+
+    <!-- Login -->
+    <div id="form-login">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="login-email" placeholder="tu@email.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input type="password" id="login-password" placeholder="••••••••" />
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Entrar</button>
+    </div>
+
+    <!-- Register -->
+    <div id="form-register" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="reg-email" placeholder="tu@email.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input type="text" id="reg-username" placeholder="nombre_usuario" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="reg-displayname" placeholder="Tu nombre" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input type="password" id="reg-password" placeholder="mínimo 8 caracteres" />
+      </div>
+      <button class="btn-primary" onclick="doRegister()">Crear cuenta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ APP ═══════════════════ -->
+<div id="app">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">🤖</div>
+      <div class="sidebar-logo-text">Arzor <span>AIs</span></div>
+    </div>
+
+    <div class="nav-section-label">Principal</div>
+    <div class="nav-item active" id="nav-dashboard" onclick="navigate('dashboard')">
+      <span class="nav-item-icon">📊</span> Dashboard
+    </div>
+    <div class="nav-item" id="nav-agents" onclick="navigate('agents')">
+      <span class="nav-item-icon">🤖</span> Mis Agentes
+    </div>
+    <div class="nav-item" id="nav-library" onclick="navigate('library')">
+      <span class="nav-item-icon">🏛️</span> Biblioteca
+    </div>
+
+    <div class="nav-section-label" style="margin-top:16px">Comunicación</div>
+    <div class="nav-item" id="nav-chat" onclick="navigate('chat')">
+      <span class="nav-item-icon">💬</span> Chat
+    </div>
+    <div class="nav-item" id="nav-roundtable" onclick="navigate('roundtable')">
+      <span class="nav-item-icon">🔵</span> Round Table
+    </div>
+
+    <div class="nav-section-label" style="margin-top:16px">Herramientas</div>
+    <div class="nav-item" id="nav-knowledge" onclick="navigate('knowledge')">
+      <span class="nav-item-icon">📚</span> Conocimiento
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <button class="logout-btn" onclick="doLogout()">
+        <span>🚪</span> Cerrar sesión
+      </button>
+    </div>
+  </nav>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-title">Arzor <span>AIs Platform</span></div>
+    <div class="topbar-user" onclick="navigate('profile')">
+      <div class="avatar" id="top-avatar">U</div>
+      <span class="topbar-username" id="top-username">Usuario</span>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- ── Dashboard ── -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-subtitle" id="dash-greeting">Bienvenido de vuelta</div>
+        </div>
+        <button class="btn btn-purple" onclick="navigate('agents')">+ Crear Agente</button>
+      </div>
+      <div class="stats-row" id="dash-stats">
+        <div class="stat-card">
+          <div class="stat-label">Mis Agentes</div>
+          <div class="stat-value purple" id="stat-agents">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sesiones de Chat</div>
+          <div class="stat-value cyan" id="stat-sessions">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Round Tables</div>
+          <div class="stat-value green" id="stat-tables">—</div>
+        </div>
+      </div>
+      <div class="page-title" style="font-size:18px;margin-bottom:16px">Mis agentes recientes</div>
+      <div class="grid-2" id="dash-agents-grid">
+        <div style="height:120px" class="skeleton"></div>
+        <div style="height:120px" class="skeleton"></div>
+        <div style="height:120px" class="skeleton"></div>
+      </div>
+    </div>
+
+    <!-- ── Mis Agentes ── -->
+    <div class="page" id="page-agents">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Mis Agentes</div>
+          <div class="page-subtitle">Crea y gestiona tus agentes personalizados</div>
+        </div>
+        <button class="btn btn-purple" onclick="openCreateAgent()">+ Nuevo Agente</button>
+      </div>
+      <div class="grid-2" id="agents-grid">
+        <div style="height:160px" class="skeleton"></div>
+        <div style="height:160px" class="skeleton"></div>
+      </div>
+    </div>
+
+    <!-- ── Biblioteca ── -->
+    <div class="page" id="page-library">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Biblioteca Pública</div>
+          <div class="page-subtitle">Agentes creados por la comunidad</div>
+        </div>
+        <select id="lib-category" style="width:auto;padding:8px 12px" onchange="loadLibrary()">
+          <option value="">Todas las categorías</option>
+          <option value="dev">Dev</option>
+          <option value="data">Data</option>
+          <option value="ops">Ops</option>
+          <option value="science">Science</option>
+          <option value="creative">Creative</option>
+        </select>
+      </div>
+      <div class="grid-2" id="library-grid">
+        <div style="height:140px" class="skeleton"></div>
+        <div style="height:140px" class="skeleton"></div>
+        <div style="height:140px" class="skeleton"></div>
+      </div>
+    </div>
+
+    <!-- ── Chat ── -->
+    <div class="page" id="page-chat">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Chat</div>
+          <div class="page-subtitle">Conversa con tus agentes</div>
+        </div>
+        <select id="chat-agent-select" style="width:auto;padding:8px 12px" onchange="startNewSession()">
+          <option value="">Seleccionar agente…</option>
+        </select>
+      </div>
+      <div class="chat-layout">
+        <div class="chat-sidebar">
+          <div class="chat-sidebar-header">
+            <h3>Sesiones</h3>
+          </div>
+          <div class="session-list" id="session-list"></div>
+        </div>
+        <div class="chat-main">
+          <div class="chat-header" id="chat-header">
+            <div class="agent-icon" id="chat-agent-icon" style="width:36px;height:36px;font-size:16px">🤖</div>
+            <div>
+              <div style="font-size:15px;font-weight:600" id="chat-agent-name">Selecciona un agente</div>
+              <div style="font-size:12px;color:var(--text-3)" id="chat-agent-tier"></div>
+            </div>
+          </div>
+          <div class="chat-messages" id="chat-messages">
+            <div class="empty-state">
+              <div class="empty-icon">💬</div>
+              <div class="empty-title">Selecciona un agente y empieza a chatear</div>
+            </div>
+          </div>
+          <div class="chat-input-area">
+            <textarea class="chat-input" id="chat-input" placeholder="Escribe tu mensaje…"
+              rows="1" onkeydown="handleChatKey(event)" oninput="autoGrow(this)"></textarea>
+            <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Round Table ── -->
+    <div class="page" id="page-roundtable">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Round Table</div>
+          <div class="page-subtitle">Debates multi-agente con síntesis automática</div>
+        </div>
+        <button class="btn btn-purple" onclick="openCreateTable()">+ Nueva Mesa</button>
+      </div>
+      <div class="grid-2" id="tables-grid">
+        <div style="height:130px" class="skeleton"></div>
+        <div style="height:130px" class="skeleton"></div>
+      </div>
+      <!-- Resultado del debate -->
+      <div id="debate-result" style="display:none;margin-top:32px">
+        <div class="page-title" style="font-size:18px;margin-bottom:16px">Resultado del debate</div>
+        <div id="debate-turns"></div>
+        <div class="synthesis-box">
+          <div class="synthesis-label">📝 Síntesis del Moderador</div>
+          <div class="synthesis-content" id="synthesis-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Knowledge ── -->
+    <div class="page" id="page-knowledge">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Base de Conocimiento</div>
+          <div class="page-subtitle">Sube documentos para enriquecer tus agentes con RAG</div>
+        </div>
+        <select id="knowledge-agent-select" style="width:auto;padding:8px 12px" onchange="loadKnowledge()">
+          <option value="">Seleccionar agente…</option>
+        </select>
+      </div>
+      <div id="knowledge-upload-area" style="display:none">
+        <div class="card" style="margin-bottom:20px;border-style:dashed;cursor:pointer;text-align:center;padding:40px" onclick="document.getElementById('file-input').click()">
+          <div style="font-size:36px;margin-bottom:12px">📄</div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:6px">Haz clic para subir un archivo</div>
+          <div style="font-size:13px;color:var(--text-2)">PDF, TXT, MD — máx. 10MB</div>
+          <input type="file" id="file-input" style="display:none" accept=".pdf,.txt,.md" onchange="uploadFile()" />
+        </div>
+        <div id="knowledge-files"></div>
+      </div>
+      <div id="knowledge-empty" class="empty-state">
+        <div class="empty-icon">📚</div>
+        <div class="empty-title">Selecciona un agente</div>
+        <div class="empty-desc">Elige un agente para ver y gestionar sus documentos</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════ MODALS ═══════════════════ -->
+
+<!-- Create Agent Modal -->
+<div class="modal-overlay" id="modal-create-agent">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Crear Agente</div>
+      <button class="modal-close" onclick="closeModal('modal-create-agent')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre del agente</label>
+        <input type="text" id="ca-name" placeholder="Ej: Data Scientist Pro" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <input type="text" id="ca-desc" placeholder="Breve descripción" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Categoría</label>
+          <select id="ca-category">
+            <option value="dev">Dev</option>
+            <option value="data">Data</option>
+            <option value="ops">Ops</option>
+            <option value="science">Science</option>
+            <option value="creative">Creative</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tier</label>
+          <select id="ca-tier">
+            <option value="fast">Fast (Groq)</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="pro">Pro (Gemini)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Instrucciones del agente <small style="color:var(--text-3)">(el AFT Compiler las optimizará)</small></label>
+        <textarea id="ca-instructions" rows="5" placeholder="Describe qué hace el agente, su expertise, tono y comportamiento..."></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="ca-public" style="width:auto" />
+        <label class="form-label" style="margin:0" for="ca-public">Hacer público en la biblioteca</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-create-agent')">Cancelar</button>
+      <button class="btn btn-purple" onclick="createAgent()">Crear y compilar con AFT ✨</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Table Modal -->
+<div class="modal-overlay" id="modal-create-table">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Nueva Round Table</div>
+      <button class="modal-close" onclick="closeModal('modal-create-table')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre de la mesa</label>
+        <input type="text" id="rt-name" placeholder="Ej: Debate sobre arquitectura" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tema del debate</label>
+        <textarea id="rt-topic" rows="3" placeholder="¿Cuál es la pregunta o tema que los agentes debatirán?"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Rondas</label>
+        <select id="rt-rounds">
+          <option value="1" selected>1 ronda</option>
+          <option value="2">2 rondas</option>
+          <option value="3">3 rondas</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-create-table')">Cancelar</button>
+      <button class="btn btn-purple" onclick="createTable()">Crear Mesa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════════════════════
+const API = '';  // mismo origen
+let state = {
+  token: localStorage.getItem('arzor_token'),
+  user: JSON.parse(localStorage.getItem('arzor_user') || 'null'),
+  currentPage: 'dashboard',
+  agents: [],
+  currentAgentId: null,
+  currentSessionId: null,
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  if (state.token && state.user) {
+    showApp();
+  } else {
+    document.getElementById('auth-screen').style.display = 'flex';
+  }
+});
+
+function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  const u = state.user;
+  if (u) {
+    document.getElementById('top-avatar').textContent = (u.username || u.display_name || 'U')[0].toUpperCase();
+    document.getElementById('top-username').textContent = u.display_name || u.username || 'Usuario';
+    document.getElementById('dash-greeting').textContent = `Bienvenido de vuelta, ${u.display_name || u.username} 👋`;
+  }
+  loadDashboard();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// API HELPER
+// ═══════════════════════════════════════════════════════════════════════
+async function api(method, path, body = null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (state.token) opts.headers['Authorization'] = `Bearer ${state.token}`;
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  if (res.status === 401) { doLogout(); return null; }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.detail || `Error ${res.status}`);
+  return data;
+}
+
+async function apiUpload(path, formData) {
+  const res = await fetch(API + path, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${state.token}` },
+    body: formData,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.detail || `Error ${res.status}`);
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════════════
+function switchAuthTab(tab) {
+  document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  hideAuthError();
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideAuthError() { document.getElementById('auth-error').style.display = 'none'; }
+
+async function doLogin() {
+  hideAuthError();
+  try {
+    const data = await api('POST', '/platform/auth/login', {
+      email: document.getElementById('login-email').value,
+      password: document.getElementById('login-password').value,
+    });
+    state.token = data.access_token;
+    state.user = { user_id: data.user_id, username: data.username, display_name: data.display_name };
+    localStorage.setItem('arzor_token', state.token);
+    localStorage.setItem('arzor_user', JSON.stringify(state.user));
+    showApp();
+  } catch(e) { showAuthError(e.message); }
+}
+
+async function doRegister() {
+  hideAuthError();
+  try {
+    await api('POST', '/platform/auth/register', {
+      email: document.getElementById('reg-email').value,
+      username: document.getElementById('reg-username').value,
+      display_name: document.getElementById('reg-displayname').value,
+      password: document.getElementById('reg-password').value,
+    });
+    toast('Cuenta creada. Ahora inicia sesión.', 'success');
+    switchAuthTab('login');
+  } catch(e) { showAuthError(e.message); }
+}
+
+function doLogout() {
+  state.token = null; state.user = null;
+  localStorage.removeItem('arzor_token');
+  localStorage.removeItem('arzor_user');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════
+const PAGE_LOADERS = {
+  dashboard: loadDashboard,
+  agents: loadAgents,
+  library: loadLibrary,
+  chat: loadChatPage,
+  roundtable: loadRoundTables,
+  knowledge: loadKnowledgePage,
+};
+
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const pageEl = document.getElementById(`page-${page}`);
+  if (pageEl) pageEl.classList.add('active');
+  const navEl = document.getElementById(`nav-${page}`);
+  if (navEl) navEl.classList.add('active');
+  state.currentPage = page;
+  if (PAGE_LOADERS[page]) PAGE_LOADERS[page]();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const [agents, sessions, tables] = await Promise.all([
+      api('GET', '/platform/agents').catch(() => ({ agents: [] })),
+      api('GET', '/platform/chat/sessions?limit=5').catch(() => ({ sessions: [] })),
+      api('GET', '/platform/round-table?limit=5').catch(() => ({ tables: [] })),
+    ]);
+    const agentList = agents?.agents || [];
+    state.agents = agentList;
+    document.getElementById('stat-agents').textContent = agentList.length;
+    document.getElementById('stat-sessions').textContent = sessions?.sessions?.length || 0;
+    document.getElementById('stat-tables').textContent = tables?.tables?.length || 0;
+    renderAgentGrid('dash-agents-grid', agentList.slice(0, 4));
+    populateAgentSelects(agentList);
+  } catch(e) { console.error(e); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AGENTS
+// ═══════════════════════════════════════════════════════════════════════
+async function loadAgents() {
+  try {
+    const data = await api('GET', '/platform/agents');
+    state.agents = data?.agents || [];
+    renderAgentGrid('agents-grid', state.agents, true);
+    populateAgentSelects(state.agents);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderAgentGrid(gridId, agents, showActions = false) {
+  const grid = document.getElementById(gridId);
+  if (!agents.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="empty-icon">🤖</div>
+      <div class="empty-title">No hay agentes aún</div>
+      <div class="empty-desc">Crea tu primer agente personalizado</div>
+      <button class="btn btn-purple" onclick="openCreateAgent()">+ Crear Agente</button>
+    </div>`;
+    return;
+  }
+  const ICONS = { dev:'💻', data:'📊', ops:'⚙️', science:'🔬', creative:'🎨', custom:'🤖' };
+  grid.innerHTML = agents.map(a => `
+    <div class="agent-card" onclick="navigate('chat')">
+      <div class="agent-card-header">
+        <div class="agent-icon cat-${a.category}">${ICONS[a.category] || '🤖'}</div>
+        <div style="flex:1;min-width:0">
+          <div class="agent-name">${esc(a.name)}</div>
+          <div class="agent-desc" style="margin-top:4px">${esc(a.description || '')}</div>
+        </div>
+      </div>
+      <div class="agent-meta">
+        <span class="badge badge-purple">${a.category}</span>
+        <span class="badge badge-cyan">${a.base_tier}</span>
+        ${a.is_public ? '<span class="badge badge-green">público</span>' : ''}
+      </div>
+      ${showActions ? `<div class="agent-card-actions">
+        <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();chatWithAgent('${a.id}')">💬 Chat</button>
+        <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteAgent('${a.id}','${esc(a.name)}')">🗑️</button>
+      </div>` : ''}
+    </div>
+  `).join('');
+}
+
+function openCreateAgent() {
+  openModal('modal-create-agent');
+}
+
+async function createAgent() {
+  const name = document.getElementById('ca-name').value.trim();
+  const instructions = document.getElementById('ca-instructions').value.trim();
+  if (!name || !instructions) { toast('Nombre e instrucciones son requeridos', 'error'); return; }
+  try {
+    toast('Compilando con AFT… puede tardar unos segundos ⚡', 'success');
+    await api('POST', '/platform/agents', {
+      name,
+      description: document.getElementById('ca-desc').value,
+      category: document.getElementById('ca-category').value,
+      base_tier: document.getElementById('ca-tier').value,
+      system_instructions: instructions,
+      is_public: document.getElementById('ca-public').checked,
+    });
+    closeModal('modal-create-agent');
+    toast('Agente creado y compilado correctamente ✅', 'success');
+    loadAgents();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteAgent(agentId, name) {
+  if (!confirm(`¿Eliminar el agente "${name}"? Esta acción no se puede deshacer.`)) return;
+  try {
+    await api('DELETE', `/platform/agents/${agentId}`);
+    toast('Agente eliminado', 'success');
+    loadAgents();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// LIBRARY
+// ═══════════════════════════════════════════════════════════════════════
+async function loadLibrary() {
+  const category = document.getElementById('lib-category').value;
+  try {
+    const data = await api('GET', `/platform/agents/public?${category ? `category=${category}` : ''}`);
+    renderAgentGrid('library-grid', data?.agents || []);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CHAT
+// ═══════════════════════════════════════════════════════════════════════
+async function loadChatPage() {
+  await loadAgents();
+  loadSessions();
+}
+
+function chatWithAgent(agentId) {
+  navigate('chat');
+  document.getElementById('chat-agent-select').value = agentId;
+  state.currentAgentId = agentId;
+  state.currentSessionId = null;
+  const agent = state.agents.find(a => a.id === agentId);
+  if (agent) updateChatHeader(agent);
+  enableSendBtn();
+  document.getElementById('chat-messages').innerHTML = '';
+}
+
+function startNewSession() {
+  const agentId = document.getElementById('chat-agent-select').value;
+  if (!agentId) return;
+  state.currentAgentId = agentId;
+  state.currentSessionId = null;
+  const agent = state.agents.find(a => a.id === agentId);
+  if (agent) updateChatHeader(agent);
+  document.getElementById('chat-messages').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">✨</div>
+      <div class="empty-title">Nueva sesión iniciada</div>
+      <div class="empty-desc">Escribe tu primer mensaje para comenzar</div>
+    </div>`;
+  enableSendBtn();
+}
+
+function updateChatHeader(agent) {
+  const ICONS = { dev:'💻', data:'📊', ops:'⚙️', science:'🔬', creative:'🎨', custom:'🤖' };
+  document.getElementById('chat-agent-name').textContent = agent.name;
+  document.getElementById('chat-agent-tier').textContent = `Tier: ${agent.base_tier}`;
+  document.getElementById('chat-agent-icon').textContent = ICONS[agent.category] || '🤖';
+}
+
+function enableSendBtn() {
+  document.getElementById('send-btn').disabled = !state.currentAgentId;
+}
+
+async function loadSessions() {
+  try {
+    const data = await api('GET', '/platform/chat/sessions');
+    const list = document.getElementById('session-list');
+    const sessions = data?.sessions || [];
+    if (!sessions.length) { list.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-3)">No hay sesiones aún</div>'; return; }
+    list.innerHTML = sessions.map(s => `
+      <div class="session-item ${s.id === state.currentSessionId ? 'active' : ''}" onclick="loadSession('${s.id}','${s.agent_id}')">
+        <div class="session-title">${esc(s.title || 'Sesión')}</div>
+        <div class="session-date">${formatDate(s.updated_at)}</div>
+      </div>
+    `).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function loadSession(sessionId, agentId) {
+  state.currentSessionId = sessionId;
+  state.currentAgentId = agentId;
+  document.getElementById('chat-agent-select').value = agentId || '';
+  const agent = state.agents.find(a => a.id === agentId);
+  if (agent) updateChatHeader(agent);
+  enableSendBtn();
+  try {
+    const data = await api('GET', `/platform/chat/sessions/${sessionId}`);
+    const msgs = data?.messages || [];
+    renderMessages(msgs);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderMessages(msgs) {
+  const container = document.getElementById('chat-messages');
+  if (!msgs.length) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-title">Sin mensajes</div></div>'; return; }
+  container.innerHTML = msgs.map(m => renderMessage(m.role, m.content, m.id, m.metadata)).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+function renderMessage(role, content, msgId = null, metadata = {}) {
+  const cached = metadata?.cached ? ' <span title="Respuesta cacheada" style="opacity:0.5">⚡</span>' : '';
+  const provider = metadata?.provider && metadata.provider !== 'cache' ? `<span>${metadata.provider}</span>` : '';
+  return `
+    <div class="message ${role}">
+      <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+      <div>
+        <div class="message-bubble">${esc(content).replace(/\n/g,'<br/>')}</div>
+        ${role === 'assistant' ? `<div class="message-meta">
+          ${provider}${cached}
+          ${msgId ? `<span class="feedback-btn" onclick="sendFeedback('${msgId}',1)" title="Positivo">👍</span>
+          <span class="feedback-btn" onclick="sendFeedback('${msgId}',-1)" title="Negativo">👎</span>` : ''}
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg || !state.currentAgentId) return;
+  input.value = ''; autoGrow(input);
+  appendMessage('user', msg);
+  document.getElementById('send-btn').disabled = true;
+  const typingId = appendTyping();
+  try {
+    const data = await api('POST', `/platform/chat/${state.currentAgentId}`, {
+      message: msg,
+      session_id: state.currentSessionId,
+    });
+    removeTyping(typingId);
+    state.currentSessionId = data.session_id;
+    appendMessageEl(renderMessage('assistant', data.content, data.message_id, {
+      provider: data.provider, model: data.model, cached: data.provider === 'cache'
+    }));
+    loadSessions();
+  } catch(e) {
+    removeTyping(typingId);
+    toast(e.message, 'error');
+  } finally {
+    document.getElementById('send-btn').disabled = false;
+  }
+}
+
+function appendMessage(role, content) {
+  appendMessageEl(renderMessage(role, content));
+}
+
+function appendMessageEl(html) {
+  const container = document.getElementById('chat-messages');
+  // Remove empty state
+  const empty = container.querySelector('.empty-state');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  container.appendChild(div.firstElementChild);
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendTyping() {
+  const id = 'typing-' + Date.now();
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.id = id;
+  div.className = 'message assistant';
+  div.innerHTML = `<div class="message-avatar">🤖</div><div class="message-bubble"><div class="spinner"></div></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return id;
+}
+
+function removeTyping(id) { document.getElementById(id)?.remove(); }
+
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+async function sendFeedback(msgId, value) {
+  if (!state.currentAgentId) return;
+  try {
+    await api('POST', `/platform/chat/messages/${msgId}/feedback?agent_id=${state.currentAgentId}`, { value });
+    toast(value > 0 ? '👍 Feedback positivo registrado' : '👎 Feedback negativo registrado', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ROUND TABLE
+// ═══════════════════════════════════════════════════════════════════════
+async function loadRoundTables() {
+  try {
+    const data = await api('GET', '/platform/round-table');
+    const tables = data?.tables || [];
+    const grid = document.getElementById('tables-grid');
+    if (!tables.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">🔵</div>
+        <div class="empty-title">No hay mesas de debate</div>
+        <div class="empty-desc">Crea una nueva mesa y añade agentes para debatir</div>
+        <button class="btn btn-purple" onclick="openCreateTable()">+ Nueva Mesa</button>
+      </div>`;
+      return;
+    }
+    grid.innerHTML = tables.map(t => `
+      <div class="card" style="cursor:pointer" onclick="viewTable('${t.id}')">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="font-size:28px">🔵</div>
+          <div>
+            <div style="font-weight:600">${esc(t.name)}</div>
+            <div style="font-size:12px;color:var(--text-3)">${esc(t.topic?.slice(0,80) || '')}…</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge ${t.status==='done'?'badge-green':t.status==='running'?'badge-amber':'badge-cyan'}">${t.status}</span>
+          ${t.status==='idle' ? `<button class="btn btn-sm btn-purple" onclick="event.stopPropagation();startDebate('${t.id}')">▶ Iniciar</button>` : ''}
+          ${t.status==='done' ? `<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();viewResult('${t.id}')">Ver resultado</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openCreateTable() { openModal('modal-create-table'); }
+
+async function createTable() {
+  const name = document.getElementById('rt-name').value.trim();
+  const topic = document.getElementById('rt-topic').value.trim();
+  if (!name || !topic) { toast('Nombre y tema son requeridos', 'error'); return; }
+  try {
+    const table = await api('POST', '/platform/round-table', {
+      name, topic, description: '',
+    });
+    closeModal('modal-create-table');
+    toast('Mesa creada ✅ Ahora añade agentes en la DB o por API', 'success');
+    loadRoundTables();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function startDebate(tableId) {
+  const rounds = 1;
+  toast('Iniciando debate… esto puede tardar.', 'success');
+  try {
+    const result = await api('POST', `/platform/round-table/${tableId}/start`, { rounds });
+    showDebateResult(result);
+    loadRoundTables();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function viewResult(tableId) {
+  try {
+    const result = await api('GET', `/platform/round-table/${tableId}/result`);
+    showDebateResult(result);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function showDebateResult(result) {
+  document.getElementById('debate-result').style.display = 'block';
+  document.getElementById('debate-turns').innerHTML = (result.turns || []).map(t => `
+    <div class="debate-turn">
+      <div class="debate-turn-header">
+        <div class="agent-icon" style="width:32px;height:32px;font-size:14px">🤖</div>
+        <div>
+          <div class="debate-turn-name">${esc(t.agent_name)}</div>
+          <div class="debate-turn-round">Ronda ${t.round} · ${t.provider} · ${t.model}</div>
+        </div>
+      </div>
+      <div class="debate-turn-content">${esc(t.content).replace(/\n/g,'<br/>')}</div>
+    </div>
+  `).join('');
+  document.getElementById('synthesis-content').innerHTML = esc(result.synthesis || '').replace(/\n/g,'<br/>');
+  document.getElementById('debate-result').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// KNOWLEDGE
+// ═══════════════════════════════════════════════════════════════════════
+async function loadKnowledgePage() {
+  await loadAgents();
+}
+
+async function loadKnowledge() {
+  const agentId = document.getElementById('knowledge-agent-select').value;
+  document.getElementById('knowledge-empty').style.display = agentId ? 'none' : 'block';
+  document.getElementById('knowledge-upload-area').style.display = agentId ? 'block' : 'none';
+  if (!agentId) return;
+  try {
+    const data = await api('GET', `/platform/knowledge/${agentId}/files`);
+    const files = data?.files || [];
+    document.getElementById('knowledge-files').innerHTML = files.length
+      ? `<div style="display:flex;flex-direction:column;gap:8px">${files.map(f => `
+          <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px">
+            <span style="font-size:24px">📄</span>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:500">${esc(f.filename)}</div>
+              <div style="font-size:12px;color:var(--text-3)">${f.chunks} chunks · ${f.status}</div>
+            </div>
+            <button class="btn btn-sm btn-danger" onclick="deleteFile('${agentId}','${f.file_id}')">🗑️</button>
+          </div>`).join('')}</div>`
+      : '<div style="font-size:14px;color:var(--text-3);margin-top:16px">No hay documentos aún. Sube el primero.</div>';
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function uploadFile() {
+  const agentId = document.getElementById('knowledge-agent-select').value;
+  const fileInput = document.getElementById('file-input');
+  if (!agentId || !fileInput.files[0]) return;
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  try {
+    toast('Subiendo y procesando…', 'success');
+    await apiUpload(`/platform/knowledge/${agentId}/upload`, formData);
+    toast('Documento procesado y añadido al RAG ✅', 'success');
+    loadKnowledge();
+  } catch(e) { toast(e.message, 'error'); }
+  fileInput.value = '';
+}
+
+async function deleteFile(agentId, fileId) {
+  if (!confirm('¿Eliminar este documento?')) return;
+  try {
+    await api('DELETE', `/platform/knowledge/${agentId}/files/${fileId}`);
+    toast('Documento eliminado', 'success');
+    loadKnowledge();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// HELPERS UI
+// ═══════════════════════════════════════════════════════════════════════
+function populateAgentSelects(agents) {
+  ['chat-agent-select', 'knowledge-agent-select'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    const first = sel.options[0].outerHTML;
+    sel.innerHTML = first + agents.map(a => `<option value="${a.id}" ${a.id===cur?'selected':''}>${esc(a.name)}</option>`).join('');
+  });
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function toast(msg, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> ${esc(msg)}`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-ES', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+</script>
+</body>
+</html>

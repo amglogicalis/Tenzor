@@ -59,6 +59,15 @@ async def root():
     """
     return FileResponse("app/static/index.html")
 
+@app.get("/platform")
+@app.get("/platform/{full_path:path}")
+async def platform_spa(full_path: str = ""):
+    """
+    Sirve la SPA de Arzor AIs Platform.
+    Todas las sub-rutas del frontend se resuelven aquí (client-side routing).
+    """
+    return FileResponse("app/static/platform/index.html")
+
 import asyncio
 import logging
 from app.routers.chat import ai_service
