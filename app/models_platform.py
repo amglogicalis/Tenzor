@@ -44,3 +44,69 @@ class UpdateProfileRequest(BaseModel):
     display_name: Optional[str] = Field(None, max_length=100)
     bio: Optional[str] = Field(None, max_length=500)
     avatar_url: Optional[str] = None
+
+
+# ─── Agents ───────────────────────────────────────────────────────────────────
+
+VALID_CATEGORIES = {"dev", "data", "ops", "creative", "science", "custom"}
+VALID_TIERS = {"fast", "balanced", "pro"}
+
+
+class CreateAgentRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    category: str = Field(..., pattern=r"^(dev|data|ops|creative|science|custom)$")
+    base_tier: str = Field("balanced", pattern=r"^(fast|balanced|pro)$")
+    # Instrucciones en lenguaje natural para el compilador AFT (Fase 3)
+    # En Fase 2 se guardan tal cual como system_instructions de la v1
+    system_instructions: str = Field(..., min_length=20, max_length=8000)
+    is_public: bool = False
+
+
+class UpdateAgentRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    category: Optional[str] = Field(None, pattern=r"^(dev|data|ops|creative|science|custom)$")
+    base_tier: Optional[str] = Field(None, pattern=r"^(fast|balanced|pro)$")
+    is_public: Optional[bool] = None
+
+
+class AgentVersionResponse(BaseModel):
+    id: str
+    agent_id: str
+    version: int
+    system_instructions: str
+    behavior_examples: list
+    style_rules: dict
+    domain_constraints: dict
+    retrieval_profile: dict
+    created_at: datetime
+
+
+class AgentResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    category: str
+    base_tier: str
+    is_public: bool
+    level: int
+    experience: int
+    current_version: Optional[AgentVersionResponse] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentListResponse(BaseModel):
+    agents: list[AgentResponse]
+    total: int
+
+
+class NewVersionRequest(BaseModel):
+    """Permite crear una nueva versión manual del agente con instrucciones actualizadas."""
+    system_instructions: str = Field(..., min_length=20, max_length=8000)
+    behavior_examples: Optional[list] = Field(default_factory=list)
+    style_rules: Optional[dict] = Field(default_factory=dict)
+    domain_constraints: Optional[dict] = Field(default_factory=dict)
+    retrieval_profile: Optional[dict] = Field(default_factory=dict)

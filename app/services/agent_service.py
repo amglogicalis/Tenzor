@@ -1,8 +1,393 @@
 """
 agent_service.py
 CRUD de agentes personalizados y versionado de perfiles AFT.
-Implementado en Fase 2.
+Fase 2: operaciones completas contra Supabase con RLS.
 """
-# TODO (Fase 2): crear_agente, editar_agente, listar_agentes, borrar_agente (soft-delete)
-# TODO (Fase 2): crear_version_agente, obtener_version_activa, listar_versiones
-# TODO (Fase 2): publicar_agente / hacer privado
+import logging
+from typing import Optional, Dict, Any, List
+from supabase import create_client, Client
+from app import config
+
+logger = logging.getLogger(__name__)
+
+
+class AgentService:
+    """
+    Gestiona el ciclo de vida de los agentes personalizados:
+    - Crear, leer, editar, borrar (soft-delete)
+    - Publicar / hacer privado
+    - Versionado de perfiles AFT
+    """
+
+    def __init__(self):
+        self.supabase: Optional[Client] = None
+
+        if config.SUPABASE_URL and config.SUPABASE_KEY:
+            try:
+                self.supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+                logger.info("AgentService: cliente Supabase inicializado.")
+            except Exception as e:
+                logger.error(f"AgentService: error al inicializar Supabase: {e}")
+        else:
+            logger.warning("AgentService: Supabase no configurado.")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # CREAR AGENTE
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def create_agent(
+        self,
+        user_id: str,
+        name: str,
+        description: Optional[str],
+        category: str,
+        base_tier: str,
+        system_instructions: str,
+        is_public: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Crea un agente y su primera versión (v1) de perfil AFT.
+        Devuelve el agente completo con la versión activa.
+        """
+        self._require_supabase()
+
+        # 1. Verificar límite de agentes por usuario
+        count_resp = (
+            self.supabase.table("custom_agents")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .is_("deleted_at", "null")
+            .execute()
+        )
+        current_count = count_resp.count or 0
+        if current_count >= config.ARZOR_MAX_AGENTS_PER_USER:
+            raise ValueError(
+                f"Has alcanzado el límite de {config.ARZOR_MAX_AGENTS_PER_USER} agentes. "
+                "Borra alguno antes de crear uno nuevo."
+            )
+
+        # 2. Insertar el agente (sin current_version_id por ahora)
+        try:
+            agent_resp = (
+                self.supabase.table("custom_agents")
+                .insert({
+                    "user_id": user_id,
+                    "name": name,
+                    "description": description,
+                    "category": category,
+                    "base_tier": base_tier,
+                    "is_public": is_public,
+                })
+                .execute()
+            )
+            agent = agent_resp.data[0]
+            agent_id = agent["id"]
+        except Exception as e:
+            logger.error(f"Error creando agente para user {user_id}: {e}")
+            raise ValueError("No se pudo crear el agente.")
+
+        # 3. Crear la versión 1 del perfil
+        version = self._create_version(
+            agent_id=agent_id,
+            version_number=1,
+            system_instructions=system_instructions,
+        )
+
+        # 4. Vincular el agente a su versión activa
+        try:
+            self.supabase.table("custom_agents").update(
+                {"current_version_id": version["id"]}
+            ).eq("id", agent_id).execute()
+            agent["current_version_id"] = version["id"]
+        except Exception as e:
+            logger.error(f"Error vinculando versión al agente {agent_id}: {e}")
+
+        agent["current_version"] = version
+        return agent
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # LEER AGENTES
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def list_my_agents(self, user_id: str) -> List[Dict[str, Any]]:
+        """Lista todos los agentes activos del usuario (sin soft-deleted)."""
+        self._require_supabase()
+        try:
+            resp = (
+                self.supabase.table("custom_agents")
+                .select("*")
+                .eq("user_id", user_id)
+                .is_("deleted_at", "null")
+                .order("created_at", desc=True)
+                .execute()
+            )
+            agents = resp.data or []
+            # Enriquecer con versión activa
+            for a in agents:
+                if a.get("current_version_id"):
+                    a["current_version"] = self._get_version_by_id(a["current_version_id"])
+            return agents
+        except Exception as e:
+            logger.error(f"Error listando agentes de user {user_id}: {e}")
+            return []
+
+    def get_agent(self, agent_id: str, user_id: str) -> Dict[str, Any]:
+        """
+        Obtiene un agente por ID.
+        El usuario debe ser el dueño O el agente debe ser público.
+        """
+        self._require_supabase()
+        try:
+            resp = (
+                self.supabase.table("custom_agents")
+                .select("*")
+                .eq("id", agent_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            if not resp.data:
+                raise ValueError("Agente no encontrado.")
+
+            agent = resp.data[0]
+
+            # Verificar acceso
+            if agent["user_id"] != user_id and not agent["is_public"]:
+                raise ValueError("No tienes acceso a este agente.")
+
+            if agent.get("current_version_id"):
+                agent["current_version"] = self._get_version_by_id(agent["current_version_id"])
+
+            return agent
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error obteniendo agente {agent_id}: {e}")
+            raise ValueError("Error al obtener el agente.")
+
+    def list_public_agents(self, category: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """Lista agentes públicos (biblioteca). Opcionalmente filtra por categoría."""
+        self._require_supabase()
+        try:
+            query = (
+                self.supabase.table("custom_agents")
+                .select("*")
+                .eq("is_public", True)
+                .is_("deleted_at", "null")
+                .order("level", desc=True)
+                .limit(limit)
+            )
+            if category:
+                query = query.eq("category", category)
+            resp = query.execute()
+            agents = resp.data or []
+            for a in agents:
+                if a.get("current_version_id"):
+                    a["current_version"] = self._get_version_by_id(a["current_version_id"])
+            return agents
+        except Exception as e:
+            logger.error(f"Error listando agentes públicos: {e}")
+            return []
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # ACTUALIZAR AGENTE
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def update_agent(self, agent_id: str, user_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """Actualiza campos de metadatos del agente (nombre, descripción, tier, etc.)."""
+        self._require_supabase()
+        self._assert_owner(agent_id, user_id)
+
+        allowed = {"name", "description", "category", "base_tier", "is_public"}
+        update_data = {k: v for k, v in fields.items() if k in allowed and v is not None}
+
+        if not update_data:
+            raise ValueError("No hay campos válidos para actualizar.")
+
+        try:
+            resp = (
+                self.supabase.table("custom_agents")
+                .update(update_data)
+                .eq("id", agent_id)
+                .execute()
+            )
+            agent = resp.data[0] if resp.data else {}
+            if agent.get("current_version_id"):
+                agent["current_version"] = self._get_version_by_id(agent["current_version_id"])
+            return agent
+        except Exception as e:
+            logger.error(f"Error actualizando agente {agent_id}: {e}")
+            raise ValueError("No se pudo actualizar el agente.")
+
+    def publish_agent(self, agent_id: str, user_id: str, is_public: bool) -> Dict[str, Any]:
+        """Publica o hace privado un agente."""
+        self._require_supabase()
+        self._assert_owner(agent_id, user_id)
+        try:
+            resp = (
+                self.supabase.table("custom_agents")
+                .update({"is_public": is_public})
+                .eq("id", agent_id)
+                .execute()
+            )
+            return resp.data[0] if resp.data else {}
+        except Exception as e:
+            logger.error(f"Error publicando agente {agent_id}: {e}")
+            raise ValueError("No se pudo cambiar la visibilidad del agente.")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # BORRAR AGENTE (soft-delete)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def delete_agent(self, agent_id: str, user_id: str) -> None:
+        """Soft-delete: marca deleted_at, no borra la fila."""
+        self._require_supabase()
+        self._assert_owner(agent_id, user_id)
+        from datetime import datetime, timezone
+        try:
+            self.supabase.table("custom_agents").update(
+                {"deleted_at": datetime.now(timezone.utc).isoformat()}
+            ).eq("id", agent_id).execute()
+        except Exception as e:
+            logger.error(f"Error borrando agente {agent_id}: {e}")
+            raise ValueError("No se pudo borrar el agente.")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # VERSIONADO
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def create_new_version(
+        self,
+        agent_id: str,
+        user_id: str,
+        system_instructions: str,
+        behavior_examples: Optional[list] = None,
+        style_rules: Optional[dict] = None,
+        domain_constraints: Optional[dict] = None,
+        retrieval_profile: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        """
+        Crea una nueva versión del perfil AFT y la establece como activa.
+        La versión anterior queda preservada para rollback.
+        """
+        self._require_supabase()
+        self._assert_owner(agent_id, user_id)
+
+        # Obtener el número de versión más alto actual
+        versions_resp = (
+            self.supabase.table("agent_versions")
+            .select("version")
+            .eq("agent_id", agent_id)
+            .order("version", desc=True)
+            .limit(1)
+            .execute()
+        )
+        last_version = versions_resp.data[0]["version"] if versions_resp.data else 0
+        new_version_number = last_version + 1
+
+        version = self._create_version(
+            agent_id=agent_id,
+            version_number=new_version_number,
+            system_instructions=system_instructions,
+            behavior_examples=behavior_examples or [],
+            style_rules=style_rules or {},
+            domain_constraints=domain_constraints or {},
+            retrieval_profile=retrieval_profile or {},
+        )
+
+        # Actualizar current_version_id del agente
+        self.supabase.table("custom_agents").update(
+            {"current_version_id": version["id"]}
+        ).eq("id", agent_id).execute()
+
+        return version
+
+    def list_versions(self, agent_id: str, user_id: str) -> List[Dict[str, Any]]:
+        """Lista todas las versiones de un agente (el dueño puede ver el historial)."""
+        self._require_supabase()
+        self._assert_owner(agent_id, user_id)
+        try:
+            resp = (
+                self.supabase.table("agent_versions")
+                .select("*")
+                .eq("agent_id", agent_id)
+                .order("version", desc=True)
+                .execute()
+            )
+            return resp.data or []
+        except Exception as e:
+            logger.error(f"Error listando versiones de agente {agent_id}: {e}")
+            return []
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # HELPERS INTERNOS
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _create_version(
+        self,
+        agent_id: str,
+        version_number: int,
+        system_instructions: str,
+        behavior_examples: Optional[list] = None,
+        style_rules: Optional[dict] = None,
+        domain_constraints: Optional[dict] = None,
+        retrieval_profile: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        try:
+            resp = (
+                self.supabase.table("agent_versions")
+                .insert({
+                    "agent_id": agent_id,
+                    "version": version_number,
+                    "system_instructions": system_instructions,
+                    "behavior_examples": behavior_examples or [],
+                    "style_rules": style_rules or {},
+                    "domain_constraints": domain_constraints or {},
+                    "retrieval_profile": retrieval_profile or {},
+                })
+                .execute()
+            )
+            return resp.data[0]
+        except Exception as e:
+            logger.error(f"Error creando versión {version_number} del agente {agent_id}: {e}")
+            raise ValueError("No se pudo guardar la versión del agente.")
+
+    def _get_version_by_id(self, version_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            resp = (
+                self.supabase.table("agent_versions")
+                .select("*")
+                .eq("id", version_id)
+                .single()
+                .execute()
+            )
+            return resp.data
+        except Exception:
+            return None
+
+    def _assert_owner(self, agent_id: str, user_id: str) -> None:
+        """Lanza ValueError si el usuario no es el dueño del agente."""
+        try:
+            resp = (
+                self.supabase.table("custom_agents")
+                .select("user_id")
+                .eq("id", agent_id)
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            if not resp.data:
+                raise ValueError("Agente no encontrado.")
+            if resp.data[0]["user_id"] != user_id:
+                raise ValueError("No tienes permiso para modificar este agente.")
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error verificando propiedad del agente {agent_id}: {e}")
+            raise ValueError("Error verificando permisos.")
+
+    def _require_supabase(self):
+        if not self.supabase:
+            raise ValueError("El servicio de agentes no está disponible. Supabase no configurado.")
+
+
+# Singleton global
+agent_service = AgentService()
