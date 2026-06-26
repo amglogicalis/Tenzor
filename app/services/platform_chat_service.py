@@ -26,8 +26,9 @@ import json
 import logging
 from typing import Optional, List, Dict, Any
 
-from supabase import create_client, Client
+from supabase import Client
 from app import config
+from app.db import supabase_admin
 from app.services.provider_router_service import provider_router, InferenceError
 from app.services.platform_rag_service import PlatformRAGService
 from app.services.agent_cache_service import AgentCacheService
@@ -107,21 +108,14 @@ class PlatformChatService:
     """
 
     def __init__(self):
-        self._sb: Optional[Client] = None
+        self._sb: Optional[Client] = supabase_admin
         self._rag = PlatformRAGService()
         self._cache = AgentCacheService()
+        if not self._sb:
+            logger.warning("PlatformChatService: Supabase no configurado.")
+        else:
+            logger.info("PlatformChatService: usando cliente admin (service_role).")
 
-        if config.SUPABASE_URL and config.SUPABASE_SERVICE_KEY:
-            try:
-                # Service key para escribir sin RLS en el backend
-                self._sb = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
-                logger.info("PlatformChatService: cliente Supabase (service key) inicializado.")
-            except Exception as e:
-                logger.error(f"PlatformChatService: error inicializando Supabase: {e}")
-        elif config.SUPABASE_URL and config.SUPABASE_KEY:
-            # Fallback a anon key (RLS activo)
-            self._sb = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-            logger.warning("PlatformChatService: usando anon key (RLS activo).")
 
     # ──────────────────────────────────────────────────────────────────────────
     # PUNTO DE ENTRADA PRINCIPAL

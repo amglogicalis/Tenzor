@@ -81,7 +81,8 @@ def make_supabase_mock(
 class TestRegister:
     def test_register_success(self):
         mock_sb = make_supabase_mock()
-        with patch("app.services.platform_auth_service.platform_auth_service.supabase", mock_sb):
+        with patch("app.services.platform_auth_service.platform_auth_service.supabase", mock_sb), \
+             patch("app.services.platform_auth_service.platform_auth_service._admin", mock_sb):
             resp = client.post("/platform/auth/register", json={
                 "email": "nuevo@example.com",
                 "password": "password123",

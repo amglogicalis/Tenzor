@@ -26,8 +26,9 @@ import logging
 import re
 from typing import Optional, List, Dict, Any
 
-from supabase import create_client, Client
+from supabase import Client
 from app import config
+from app.db import supabase_admin
 
 logger = logging.getLogger(__name__)
 
@@ -67,16 +68,11 @@ class AgentCacheService:
     """
 
     def __init__(self):
-        self._sb: Optional[Client] = None
-
-        if config.SUPABASE_URL and config.SUPABASE_SERVICE_KEY:
-            try:
-                self._sb = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
-                logger.info("AgentCacheService: cliente Supabase (service key) inicializado.")
-            except Exception as e:
-                logger.error(f"AgentCacheService: error inicializando Supabase: {e}")
-        elif config.SUPABASE_URL and config.SUPABASE_KEY:
-            self._sb = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+        self._sb: Optional[Client] = supabase_admin
+        if not self._sb:
+            logger.warning("AgentCacheService: Supabase no configurado.")
+        else:
+            logger.info("AgentCacheService: usando cliente admin (service_role).")
 
     # ──────────────────────────────────────────────────────────────────────────
     # CACHE

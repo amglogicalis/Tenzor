@@ -1,8 +1,9 @@
 import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-from supabase import create_client, Client
+from supabase import Client
 from app import config
+from app.db import supabase_admin
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -12,15 +13,14 @@ class KeyService:
         self.supabase: Optional[Client] = None
         self.dev_mode = True
 
-        if config.SUPABASE_URL and config.SUPABASE_KEY:
-            try:
-                self.supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-                self.dev_mode = False
-                logger.info("Cliente Supabase inicializado correctamente. Modo producción activo.")
-            except Exception as e:
-                logger.error(f"Error inicializando Supabase: {e}. Se usará modo desarrollo.")
+        if supabase_admin:
+            self.supabase = supabase_admin
+            self.dev_mode = False
+            logger.info("KeyService: usando cliente admin (service_role). Modo producción activo.")
+        elif config.SUPABASE_URL:
+            logger.warning("KeyService: Supabase no configurado — modo desarrollo activo.")
         else:
-            logger.warning("SUPABASE_URL o SUPABASE_KEY faltantes. La API funcionará en MODO DESARROLLO (acepta cualquier API key que comience con 'tenzor-').")
+            logger.warning("SUPABASE_URL faltante. La API funcionará en MODO DESARROLLO.")
 
     def validate_key(self, api_key: str) -> Dict[str, Any]:
         """

@@ -23,8 +23,9 @@ import re
 import logging
 from typing import Optional, List, Dict, Any
 
-from supabase import create_client, Client
+from supabase import Client
 from app import config
+from app.db import supabase_admin
 
 logger = logging.getLogger(__name__)
 
@@ -73,15 +74,11 @@ class PlatformRAGService:
     """
 
     def __init__(self):
-        self.supabase: Optional[Client] = None
-        if config.SUPABASE_URL and config.SUPABASE_KEY:
-            try:
-                self.supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-                logger.info("PlatformRAGService: cliente Supabase inicializado.")
-            except Exception as e:
-                logger.error(f"PlatformRAGService: error inicializando Supabase: {e}")
-        else:
+        self.supabase: Optional[Client] = supabase_admin
+        if not self.supabase:
             logger.warning("PlatformRAGService: Supabase no configurado.")
+        else:
+            logger.info("PlatformRAGService: usando cliente admin (service_role).")
 
     # ──────────────────────────────────────────────────────────────────────────
     # INGESTA DE ARCHIVOS
