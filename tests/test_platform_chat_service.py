@@ -280,6 +280,10 @@ class TestChatService:
         svc._sb = None  # Sin DB
         svc._rag = MagicMock()
         svc._rag.search.return_value = []
+        # Cache mockeado: MISS por defecto (None = sin hit)
+        svc._cache = MagicMock()
+        svc._cache.get_cached_response.return_value = None
+        svc._cache.store_response.return_value = True
         return svc
 
     def test_chat_no_rag_success(self):

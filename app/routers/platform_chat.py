@@ -15,12 +15,14 @@ from pydantic import BaseModel, Field
 
 from app.middleware.platform_auth_middleware import require_platform_user
 from app.services.platform_chat_service import PlatformChatService
+from app.services.agent_cache_service import AgentCacheService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/platform/chat", tags=["platform-chat"])
 
-# Singleton del servicio
+# Singletons
 _chat_service = PlatformChatService()
+_cache_service = AgentCacheService()
 
 
 # ─── Modelos de request / response ────────────────────────────────────────────
@@ -44,6 +46,14 @@ class ChatRequest(BaseModel):
         None, pattern=r"^(groq|google|openrouter)$",
         description="Forzar un provider concreto (solo para debug)"
     )
+    use_cache: bool = Field(
+        True,
+        description="Si False, ignora el cache y llama siempre al LLM"
+    )
+
+
+class FeedbackRequest(BaseModel):
+    value: int = Field(..., description="+1 para positivo, -1 para negativo")
 
 
 class ChatMessageResponse(BaseModel):
@@ -177,3 +187,83 @@ def delete_session(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return {"detail": "Sesión eliminada correctamente.", "session_id": session_id}
+
+
+# ─── Feedback y Cache ─────────────────────────────────────────────────────────
+
+@router.post(
+    "/messages/{message_id}/feedback",
+    summary="Dar feedback a una respuesta (+1 / -1)",
+    status_code=status.HTTP_200_OK,
+)
+def submit_feedback(
+    message_id: str,
+    agent_id: str = Query(..., description="UUID del agente al que pertenece el mensaje"),
+    req: FeedbackRequest = ...,
+    user: dict = Depends(require_platform_user),
+):
+    user_id = user["user_id"]
+    if req.value not in (1, -1):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El valor de feedback debe ser +1 o -1."
+        )
+    try:
+        result = _cache_service.submit_feedback(
+            message_id=message_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            value=req.value,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return result
+
+
+@router.get(
+    "/{agent_id}/cache/stats",
+    summary="Estadísticas del cache del agente",
+    status_code=status.HTTP_200_OK,
+)
+def get_cache_stats(
+    agent_id: str,
+    user: dict = Depends(require_platform_user),
+):
+    stats = _cache_service.get_cache_stats(agent_id=agent_id)
+    return {"agent_id": agent_id, **stats}
+
+
+@router.delete(
+    "/{agent_id}/cache",
+    summary="Invalidar cache del agente (usar tras re-síntesis)",
+    status_code=status.HTTP_200_OK,
+)
+def invalidate_cache(
+    agent_id: str,
+    user: dict = Depends(require_platform_user),
+):
+    count = _cache_service.invalidate_cache(agent_id=agent_id)
+    return {"agent_id": agent_id, "entries_removed": count}
+
+
+@router.get(
+    "/{agent_id}/resynthesis/prepare",
+    summary="Preparar contexto para re-síntesis del agente",
+    description=(
+        "Analiza los feedbacks negativos y devuelve el contexto para mejorar el agente "
+        "vía AFT Compiler. El usuario debe llamar manualmente a /platform/compiler para aplicarlo."
+    ),
+    status_code=status.HTTP_200_OK,
+)
+def prepare_resynthesis(
+    agent_id: str,
+    current_instructions: str = Query(..., description="Instrucciones actuales del agente"),
+    user: dict = Depends(require_platform_user),
+):
+    user_id = user["user_id"]
+    context = _cache_service.prepare_resynthesis_context(
+        agent_id=agent_id,
+        user_id=user_id,
+        current_instructions=current_instructions,
+    )
+    return {"agent_id": agent_id, **context}

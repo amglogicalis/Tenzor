@@ -30,6 +30,7 @@ from supabase import create_client, Client
 from app import config
 from app.services.provider_router_service import provider_router, InferenceError
 from app.services.platform_rag_service import PlatformRAGService
+from app.services.agent_cache_service import AgentCacheService
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,7 @@ class PlatformChatService:
     def __init__(self):
         self._sb: Optional[Client] = None
         self._rag = PlatformRAGService()
+        self._cache = AgentCacheService()
 
         if config.SUPABASE_URL and config.SUPABASE_SERVICE_KEY:
             try:
@@ -187,7 +189,33 @@ class PlatformChatService:
                 # prefix (default) o inline → el contexto va al inicio
                 final_system_prompt = rag_context + "\n\n" + system_instructions
 
-        # 6. Construir lista de mensajes para el provider
+        # 6. Cache lookup — antes de llamar al LLM
+        cached_response = self._cache.get_cached_response(
+            agent_id=agent_id, query=user_message
+        )
+        if cached_response:
+            # HIT: devolver respuesta cacheada sin llamar al LLM
+            msg_id = self._save_message(
+                session_id=session.session_id, role="user",
+                content=user_message, metadata={},
+            )
+            cached_msg_id = self._save_message(
+                session_id=session.session_id, role="assistant",
+                content=cached_response,
+                metadata={"cached": True, "provider": "cache", "rag_chunks_used": rag_chunks_used},
+            )
+            self._touch_session(session.session_id)
+            return ChatResponse(
+                session_id=session.session_id,
+                message_id=cached_msg_id,
+                content=cached_response,
+                provider="cache",
+                model="cache",
+                tokens_in=0, tokens_out=0, latency_ms=0.0,
+                rag_chunks_used=rag_chunks_used,
+            )
+
+        # 7. Construir lista de mensajes para el provider
         messages = self._build_messages(history=history, user_message=user_message)
 
         # 7. Llamar al router de providers
@@ -226,10 +254,18 @@ class PlatformChatService:
                 "tokens_out": result.tokens_out,
                 "latency_ms": result.latency_ms,
                 "rag_chunks_used": rag_chunks_used,
+                "original_query": user_message[:500],  # para propagar feedback al cache
             },
         )
 
-        # 9. Actualizar timestamp de la sesión
+        # 9. Guardar en cache
+        self._cache.store_response(
+            agent_id=agent_id,
+            query=user_message,
+            response=result.content,
+        )
+
+        # 10. Actualizar timestamp de la sesión
         self._touch_session(session.session_id)
 
         return ChatResponse(
