@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import chat, admin, endpoints
+from app.routers import platform_auth, platform_agents, platform_knowledge, platform_chat, round_table
 from app import config
 
 
@@ -30,10 +31,17 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": f"Error interno en el servidor de Tenzor: {str(exc)}"}
     )
 
-# Registrar Routers
+# Registrar Routers — Tenzor AI (chat técnico privado, API compatible OpenAI)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(endpoints.router)
+
+# Registrar Routers — Arzor AIs Platform (stubs, se implementan fase a fase)
+app.include_router(platform_auth.router)
+app.include_router(platform_agents.router)
+app.include_router(platform_knowledge.router)
+app.include_router(platform_chat.router)
+app.include_router(round_table.router)
 
 
 from fastapi.staticfiles import StaticFiles

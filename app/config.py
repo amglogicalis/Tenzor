@@ -46,3 +46,29 @@ VERTEX_ACCELERATOR_COUNT = int(os.getenv("VERTEX_ACCELERATOR_COUNT", "2"))
 VERTEX_DEPLOY_HTTP_TIMEOUT_SECONDS = float(os.getenv("VERTEX_DEPLOY_HTTP_TIMEOUT_SECONDS", "30"))
 VERTEX_LIFECYCLE_OPERATION_TIMEOUT_SECONDS = int(os.getenv("VERTEX_LIFECYCLE_OPERATION_TIMEOUT_SECONDS", "2700"))
 VERTEX_LIFECYCLE_STATE_TABLE = os.getenv("VERTEX_LIFECYCLE_STATE_TABLE", "model_lifecycle_state")
+
+# ─── Arzor AIs Platform ───────────────────────────────────────────────────────
+
+# OpenRouter — tercer proveedor de inferencia
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+# Clave de cifrado AES para guardar API keys de usuarios en Supabase
+# Genera con: python -c "import secrets; print(secrets.token_hex(32))"
+ARZOR_ENCRYPTION_KEY = os.getenv("ARZOR_ENCRYPTION_KEY", "")
+
+# JWT secret para tokens de sesión de la plataforma (si no se usa Supabase Auth JWT)
+ARZOR_JWT_SECRET = os.getenv("ARZOR_JWT_SECRET", "")
+
+# Supabase service-role key (para operaciones admin sin RLS desde el backend)
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+
+# Límites de la plataforma
+ARZOR_MAX_AGENTS_PER_USER = int(os.getenv("ARZOR_MAX_AGENTS_PER_USER", "10"))
+ARZOR_MAX_FILES_PER_AGENT = int(os.getenv("ARZOR_MAX_FILES_PER_AGENT", "20"))
+ARZOR_MAX_FILE_SIZE_MB = int(os.getenv("ARZOR_MAX_FILE_SIZE_MB", "10"))
+ARZOR_ROUND_TABLE_MAX_AGENTS = int(os.getenv("ARZOR_ROUND_TABLE_MAX_AGENTS", "5"))
+ARZOR_ROUND_TABLE_MAX_TURNS = int(os.getenv("ARZOR_ROUND_TABLE_MAX_TURNS", "10"))
+
+# Cooldown base en segundos cuando se recibe un 429
+ARZOR_COOLDOWN_BASE_SECONDS = int(os.getenv("ARZOR_COOLDOWN_BASE_SECONDS", "60"))
