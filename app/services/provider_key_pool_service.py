@@ -67,8 +67,8 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
 # Orden de providers por tier (primary → fallback → last-resort)
 PROVIDER_ORDER: Dict[str, List[str]] = {
     "fast":     ["groq", "google", "openrouter"],
-    "balanced": ["google", "groq", "openrouter"],   # Gemini primero: más generoso RPM/TPM
-    "pro":      ["google", "openrouter", "groq"],
+    "balanced": ["openrouter", "groq", "google"],  # OpenRouter free primero en balanced
+    "pro":      ["google", "openrouter", "groq"],   # Google primero en pro (mayor calidad)
 }
 
 
