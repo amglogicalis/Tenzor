@@ -224,10 +224,17 @@ class PlatformChatService:
                 force_provider=force_provider,
             )
         except InferenceError as e:
-            logger.error(f"Chat InferenceError: {e}")
+            logger.error(f"Chat InferenceError: {e} | tier={tier} | intentos={len(e.attempts)}")
+            for a in e.attempts:
+                logger.error(
+                    f"  >> provider={a.provider} model={a.model} "
+                    f"code={a.error_code} retry_after={a.retry_after} msg={a.error_msg[:200]}"
+                )
+            providers_tried = list({a.provider for a in e.attempts})
             raise ValueError(
                 f"No se pudo obtener respuesta del agente. "
-                f"Todos los providers están saturados. Intenta de nuevo en unos minutos."
+                f"Todos los providers est\u00e1n saturados. Intenta de nuevo en unos minutos. "
+                f"(providers intentados: {', '.join(providers_tried) or 'ninguno'})"
             )
 
         # 8. Persistir mensajes
