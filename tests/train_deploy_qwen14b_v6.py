@@ -8,12 +8,9 @@
 Qué hace este script, en orden:
 
   1. Sube el dataset final (dataset_final.jsonl, ~700 ejemplos) a GCS.
-  2. Lanza el job de FULL fine-tuning (no LoRA) de Qwen3-14B.
-     - Intenta primero en us-central1.
-     - Si Vertex devuelve un error de capacidad/alta demanda (RESOURCE_EXHAUSTED
-       o el mensaje "high demand"), reintenta automáticamente en europe-west4.
-     - La cuota de tuning jobs es GLOBAL (compartida entre regiones), así que
-       esto es seguro: no consume cuota distinta, solo busca dónde hay hueco.
+  2. Lanza el job de FULL fine-tuning (no LoRA) de Qwen3-14B directamente en
+     europe-west4 (sin pasar por us-central1, que venía dando error de "alta
+     demanda" en el tuning gestionado).
   3. Espera a que el job termine, sondeando el estado cada 60s.
   4. Despliega el resultado SIEMPRE en us-central1 (donde tienes cuota de
      2x L4), usando vertexai.preview.model_garden.CustomModel apuntando
@@ -57,9 +54,9 @@ PROJECT_ID       = "753320073574"
 # Región de DEPLOY — fija, porque aquí es donde tienes cuota de 2x L4.
 DEPLOY_REGION    = "us-central1"
 
-# Regiones de TUNING a probar en orden. Si la primera da error de capacidad,
-# se reintenta automáticamente con la siguiente.
-TUNING_REGIONS   = ["us-central1", "europe-west4"]
+# Región de TUNING — lanzamos directo en europe-west4, sin probar antes
+# en us-central1 (ya sabemos que está saturado).
+TUNING_REGIONS   = ["europe-west4"]
 
 BUCKET_NAME      = "tenzorai-tuning"
 
@@ -144,9 +141,12 @@ def step_upload_dataset() -> None:
 
 
 def step_launch_tuning():
-    """Intenta lanzar el tuning job probando las regiones en orden.
-    Solo reintenta con la siguiente región si el error es de capacidad."""
-    sep("PASO 2/4 · Lanzando job de FULL fine-tuning (con fallback de región)")
+    """Lanza el tuning job directamente en TUNING_REGIONS[0] (europe-west4).
+    Si Vertex devuelve un error de capacidad, lo informa con claridad en vez
+    de fallar con un traceback genérico; no hay fallback automático de
+    región porque así lo pediste — si europe-west4 también está saturado,
+    añade otra región a TUNING_REGIONS y vuelve a lanzar."""
+    sep("PASO 2/4 · Lanzando job de FULL fine-tuning en europe-west4")
     log.info(f"  Modelo base : {BASE_MODEL}")
     log.info(f"  Modo        : {TUNING_MODE}")
     log.info(f"  Épocas      : {EPOCHS}")
@@ -171,7 +171,8 @@ def step_launch_tuning():
             ultimo_error = exc
             if es_error_de_capacidad(exc):
                 log.warning(f"  ⚠️ Capacidad agotada en {region}: {exc}")
-                log.warning("     Probando siguiente región..." if i < len(TUNING_REGIONS) else "")
+                if i < len(TUNING_REGIONS):
+                    log.warning("     Probando siguiente región...")
                 continue
             else:
                 # Error real de configuración (dataset, IAM, parámetro
@@ -180,9 +181,9 @@ def step_launch_tuning():
                 log.error("     Esto no se arregla cambiando de región. Deteniendo.")
                 raise
 
-    log.error(f"\n  ❌ Las {len(TUNING_REGIONS)} regiones probadas están saturadas.")
+    log.error(f"\n  ❌ La región {TUNING_REGIONS[0]} está saturada ahora mismo.")
     log.error(f"     Último error: {ultimo_error}")
-    log.error("     Prueba más tarde o añade otra región a TUNING_REGIONS.")
+    log.error("     Prueba más tarde, o añade otra región a TUNING_REGIONS y relanza.")
     sys.exit(1)
 
 
