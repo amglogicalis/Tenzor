@@ -228,7 +228,7 @@ def compile_aft_profile(req: CompileProfileRequest) -> AFTProfile:
             "GEMINI_API_KEY no configurado. El compilador AFT requiere acceso a Gemini."
         )
 
-    genai.configure(api_key=config.GEMINI_API_KEY)
+    genai.configure(api_key=config.GEMINI_API_KEY, transport="rest")
     model = genai.GenerativeModel(
         model_name=COMPILER_MODEL,
         system_instruction=_META_SYSTEM_PROMPT,

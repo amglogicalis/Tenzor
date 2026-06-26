@@ -163,7 +163,7 @@ def _call_gemini(
     system_prompt: Optional[str],
 ) -> InferenceResult:
     """Llama a Gemini y devuelve un InferenceResult normalizado."""
-    genai.configure(api_key=api_key)
+    genai.configure(api_key=api_key, transport="rest")
     gemini_model = genai.GenerativeModel(
         model_name=model,
         system_instruction=system_prompt or "",

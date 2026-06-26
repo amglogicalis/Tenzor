@@ -30,7 +30,7 @@ class AIService:
         self.gemini_enabled = False
         if config.GEMINI_API_KEY:
             try:
-                genai.configure(api_key=config.GEMINI_API_KEY)
+                genai.configure(api_key=config.GEMINI_API_KEY, transport="rest")
                 self.gemini_enabled = True
                 logger.info("Cliente Google Gemini inicializado con éxito.")
             except Exception as e:
