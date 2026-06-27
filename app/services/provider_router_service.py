@@ -288,6 +288,86 @@ def _call_openrouter(
     )
 
 
+# ─── Configuración de proveedores genéricos OpenAI-compatibles ───────────────
+
+OPENAI_COMPATIBLE_PROVIDERS = {
+    "xai": "https://api.x.ai/v1",
+    "perplexity": "https://api.perplexity.ai",
+    "deepseek": "https://api.deepseek.com",
+    "together": "https://api.together.xyz/v1",
+    "fireworks": "https://api.fireworks.ai/inference/v1",
+    "mistral": "https://api.mistral.ai/v1",
+    "sambanova": "https://api.sambanova.ai/v1",
+    "cerebras": "https://api.cerebras.ai/v1",
+    "siliconflow": "https://api.siliconflow.cn/v1",
+}
+
+def _call_openai_compatible(
+    provider: str,
+    base_url: str,
+    messages: List[Dict[str, str]],
+    model: str,
+    api_key: str,
+    temperature: float,
+    max_tokens: Optional[int],
+    system_prompt: Optional[str],
+) -> InferenceResult:
+    """
+    Llama a cualquier provider compatible con la API de OpenAI (DeepSeek, xAI, etc.).
+    """
+    payload_messages = []
+    if system_prompt:
+        payload_messages.append({"role": "system", "content": system_prompt})
+    payload_messages.extend(messages)
+
+    payload = {
+        "model": model,
+        "messages": payload_messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens or 2048,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    t0 = time.monotonic()
+    with httpx.Client(timeout=60.0) as client:
+        resp = client.post(
+            f"{base_url.rstrip('/')}/chat/completions",
+            json=payload,
+            headers=headers,
+        )
+
+    latency = (time.monotonic() - t0) * 1000
+
+    if resp.status_code == 429:
+        retry_after = _parse_retry_after(resp.headers)
+        raise _RateLimitError(resp.status_code, resp.text, retry_after)
+    if resp.status_code in (401, 403):
+        raise _AuthError(resp.status_code, resp.text)
+    if resp.status_code == 503:
+        raise _ServiceError(resp.status_code, resp.text)
+    if resp.status_code != 200:
+        raise _ProviderError(resp.status_code, resp.text)
+
+    data = resp.json()
+    choice = data["choices"][0]
+    usage = data.get("usage", {})
+
+    return InferenceResult(
+        content=choice["message"]["content"] or "",
+        provider=provider,
+        model=model,
+        key_id="",
+        tokens_in=usage.get("prompt_tokens", 0),
+        tokens_out=usage.get("completion_tokens", 0),
+        latency_ms=round(latency, 1),
+        finish_reason=choice.get("finish_reason", "stop"),
+    )
+
+
 # ─── Excepciones internas normalizadas ────────────────────────────────────────
 
 class _RateLimitError(Exception):
@@ -332,18 +412,22 @@ class ProviderRouterService:
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         force_provider: Optional[str] = None,  # override para debug
+        preferred_provider: Optional[str] = None,
+        preferred_model: Optional[str] = None,
     ) -> InferenceResult:
         """
         Punto de entrada principal.
 
         Args:
-            messages:       Lista de mensajes estilo OpenAI [{"role":..., "content":...}]
-            tier:           "fast" | "balanced" | "pro"
-            user_id:        UUID del usuario (para priorizar sus keys)
-            system_prompt:  System prompt del agente (ya compilado por AFT)
-            temperature:    0.0 - 2.0
-            max_tokens:     Máximo de tokens de salida
-            force_provider: Forzar un provider concreto (debug/test)
+            messages:           Lista de mensajes estilo OpenAI [{"role":..., "content":...}]
+            tier:               "fast" | "balanced" | "pro"
+            user_id:            UUID del usuario (para priorizar sus keys)
+            system_prompt:      System prompt del agente (ya compilado por AFT)
+            temperature:        0.0 - 2.0
+            max_tokens:         Máximo de tokens de salida
+            force_provider:     Forzar un provider concreto (debug/test)
+            preferred_provider: Proveedor preferido del agente (ej. google, groq)
+            preferred_model:    Modelo preferido del agente (ej. gemini-2.0-flash, llama-3.3-70b-versatile)
 
         Returns:
             InferenceResult con el contenido y métricas.
@@ -351,122 +435,156 @@ class ProviderRouterService:
         Raises:
             InferenceError si todos los providers y keys fallan.
         """
-        provider_order = (
-            [force_provider]
-            if force_provider
-            else key_pool.get_ordered_providers(tier)
-        )
+        # Determinar orden de proveedores priorizando el preferido
+        if force_provider:
+            provider_order = [force_provider]
+        elif preferred_provider:
+            default_fallbacks = ["groq", "google", "openrouter"]
+            provider_order = [preferred_provider]
+            for p in default_fallbacks:
+                if p != preferred_provider:
+                    provider_order.append(p)
+        else:
+            provider_order = key_pool.get_ordered_providers(tier)
 
         attempts: List[ProviderAttempt] = []
 
+        # Modelos gratuitos alternativos de OpenRouter en caso de 429
+        openrouter_free_fallbacks = [
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "meta-llama/llama-3.1-8b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "google/gemma-2-9b-it:free",
+            "deepseek/deepseek-r1-distill-llama-70b:free"
+        ]
+
         for provider in provider_order:
-            model = key_pool.get_model_for_tier(provider, tier)
-            if not model:
+            # Obtener el modelo base a intentar
+            if provider == preferred_provider and preferred_model:
+                base_model = preferred_model
+            else:
+                base_model = key_pool.get_model_for_tier(provider, tier)
+
+            if not base_model:
                 logger.warning(f"Router: no hay modelo configurado para {provider}/{tier}")
                 continue
 
+            # Si es OpenRouter y es un modelo gratuito, generamos una lista de modelos alternativos
+            models_to_try = [base_model]
+            if provider == "openrouter" and base_model.endswith(":free"):
+                for fallback_m in openrouter_free_fallbacks:
+                    if fallback_m != base_model:
+                        models_to_try.append(fallback_m)
+
             rpm_limit = PROVIDER_RPM_LIMITS.get(provider, 20)
 
-            # Intentar con hasta 2 keys del mismo provider (si hay varias)
-            for _ in range(2):
-                key = key_pool.get_best_key(
-                    provider=provider, tier=tier, user_id=user_id
-                )
-                if key is None:
-                    logger.info(f"Router: no hay keys disponibles en {provider}/{tier}, pasando al siguiente provider")
-                    break
-
-                cooldown_service.record_request(key.key_id)
-                logger.info(f"Router: intentando {provider}/{model} con key={key.key_id}")
-
-                try:
-                    result = self._dispatch(
-                        provider=provider,
-                        model=model,
-                        messages=messages,
-                        api_key=key.api_key,
-                        system_prompt=system_prompt,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
+            for model in models_to_try:
+                # Intentar con hasta 2 keys del mismo provider (si hay varias)
+                key_attempts_succeeded = False
+                for _ in range(2):
+                    key = key_pool.get_best_key(
+                        provider=provider, tier=tier, user_id=user_id
                     )
-                    # ✅ Éxito
-                    result.key_id = key.key_id
-                    cooldown_service.record_success(
-                        key.key_id,
-                        tokens_in=result.tokens_in,
-                        tokens_out=result.tokens_out,
-                    )
-                    logger.info(
-                        f"Router: ✅ {provider}/{model} | {result.tokens_in}in "
-                        f"{result.tokens_out}out | {result.latency_ms:.0f}ms"
-                    )
-                    return result
+                    if key is None:
+                        logger.info(f"Router: no hay keys disponibles en {provider} para el modelo {model}, pasando a la siguiente opción")
+                        break
 
-                except _RateLimitError as e:
-                    cooldown_service.record_429(key.key_id, retry_after=e.retry_after)
-                    attempts.append(ProviderAttempt(
-                        provider=provider, key_id=key.key_id, model=model,
-                        error_code=429, error_msg=str(e)[:200], retry_after=e.retry_after,
-                    ))
-                    logger.warning(f"Router: 429 en {provider}/{key.key_id} retry_after={e.retry_after}s")
+                    cooldown_service.record_request(key.key_id)
+                    logger.info(f"Router: intentando {provider}/{model} con key={key.key_id}")
 
-                except _AuthError as e:
-                    cooldown_service.record_auth_error(key.key_id)
-                    attempts.append(ProviderAttempt(
-                        provider=provider, key_id=key.key_id, model=model,
-                        error_code=e.code, error_msg=str(e)[:200],
-                    ))
-                    logger.error(f"Router: auth error en {provider}/{key.key_id}")
-                    break  # key inválida → pasar al siguiente provider
+                    try:
+                        result = self._dispatch(
+                            provider=provider,
+                            model=model,
+                            messages=messages,
+                            api_key=key.api_key,
+                            system_prompt=system_prompt,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                        )
+                        # ✅ Éxito
+                        result.key_id = key.key_id
+                        cooldown_service.record_success(
+                            key.key_id,
+                            tokens_in=result.tokens_in,
+                            tokens_out=result.tokens_out,
+                        )
+                        logger.info(
+                            f"Router: ✅ {provider}/{model} | {result.tokens_in}in "
+                            f"{result.tokens_out}out | {result.latency_ms:.0f}ms"
+                        )
+                        return result
 
-                except _ServiceError as e:
-                    cooldown_service.record_503(key.key_id)
-                    attempts.append(ProviderAttempt(
-                        provider=provider, key_id=key.key_id, model=model,
-                        error_code=503, error_msg=str(e)[:200],
-                    ))
-                    logger.warning(f"Router: 503 en {provider}/{key.key_id}")
-                    break  # provider caído → siguiente provider
+                    except _RateLimitError as e:
+                        cooldown_service.record_429(key.key_id, retry_after=e.retry_after)
+                        attempts.append(ProviderAttempt(
+                            provider=provider, key_id=key.key_id, model=model,
+                            error_code=429, error_msg=str(e)[:200], retry_after=e.retry_after,
+                        ))
+                        logger.warning(f"Router: 429 en {provider}/{key.key_id} para modelo {model} retry_after={e.retry_after}s")
 
-                except GroqRateLimitError as e:
-                    # SDK de Groq tiene su propia excepción de rate limit
-                    retry_after = None
-                    if hasattr(e, 'response') and e.response is not None:
-                        retry_after = _parse_retry_after(e.response.headers)
-                    cooldown_service.record_429(key.key_id, retry_after=retry_after)
-                    attempts.append(ProviderAttempt(
-                        provider=provider, key_id=key.key_id, model=model,
-                        error_code=429, error_msg=str(e)[:200], retry_after=retry_after,
-                    ))
-
-                except GroqAPIStatusError as e:
-                    code = e.status_code if hasattr(e, 'status_code') else 500
-                    if code in (401, 403):
+                    except _AuthError as e:
                         cooldown_service.record_auth_error(key.key_id)
-                        break
-                    elif code == 503:
+                        attempts.append(ProviderAttempt(
+                            provider=provider, key_id=key.key_id, model=model,
+                            error_code=e.code, error_msg=str(e)[:200],
+                        ))
+                        logger.error(f"Router: auth error en {provider}/{key.key_id}")
+                        break  # key inválida → pasar a la siguiente key/modelo
+
+                    except _ServiceError as e:
                         cooldown_service.record_503(key.key_id)
+                        attempts.append(ProviderAttempt(
+                            provider=provider, key_id=key.key_id, model=model,
+                            error_code=503, error_msg=str(e)[:200],
+                        ))
+                        logger.warning(f"Router: 503 en {provider}/{key.key_id}")
+                        break  # provider caído → siguiente key/modelo
+
+                    except GroqRateLimitError as e:
+                        retry_after = None
+                        if hasattr(e, 'response') and e.response is not None:
+                            retry_after = _parse_retry_after(e.response.headers)
+                        cooldown_service.record_429(key.key_id, retry_after=retry_after)
+                        attempts.append(ProviderAttempt(
+                            provider=provider, key_id=key.key_id, model=model,
+                            error_code=429, error_msg=str(e)[:200], retry_after=retry_after,
+                        ))
+                        logger.warning(f"Router: 429 en Groq {key.key_id} para modelo {model} retry_after={retry_after}s")
+
+                    except GroqAPIStatusError as e:
+                        code = e.status_code if hasattr(e, 'status_code') else 500
+                        if code in (401, 403):
+                            cooldown_service.record_auth_error(key.key_id)
+                            break
+                        elif code == 503:
+                            cooldown_service.record_503(key.key_id)
+                            break
+                        attempts.append(ProviderAttempt(
+                            provider=provider, key_id=key.key_id, model=model,
+                            error_code=code, error_msg=str(e)[:200],
+                        ))
+
+                    except httpx.TimeoutException:
+                        cooldown_service.record_timeout(key.key_id)
+                        attempts.append(ProviderAttempt(
+                            provider=provider, key_id=key.key_id, model=model,
+                            error_code=408, error_msg="Timeout de red",
+                        ))
+                        logger.warning(f"Router: timeout en {provider}/{key.key_id} para modelo {model}")
                         break
-                    attempts.append(ProviderAttempt(
-                        provider=provider, key_id=key.key_id, model=model,
-                        error_code=code, error_msg=str(e)[:200],
-                    ))
 
-                except httpx.TimeoutException:
-                    cooldown_service.record_timeout(key.key_id)
-                    attempts.append(ProviderAttempt(
-                        provider=provider, key_id=key.key_id, model=model,
-                        error_code=408, error_msg="Timeout de red",
-                    ))
-                    logger.warning(f"Router: timeout en {provider}/{key.key_id}")
-                    break
+                    except Exception as e:
+                        attempts.append(ProviderAttempt(
+                            provider=provider, key_id=key.key_id, model=model,
+                            error_code=500, error_msg=str(e)[:200],
+                        ))
+                        logger.error(f"Router: error inesperado en {provider}/{key.key_id}: {e}")
+                        break
 
-                except Exception as e:
-                    attempts.append(ProviderAttempt(
-                        provider=provider, key_id=key.key_id, model=model,
-                        error_code=500, error_msg=str(e)[:200],
-                    ))
-                    logger.error(f"Router: error inesperado en {provider}/{key.key_id}: {e}")
+                # Si logramos el éxito con alguna key, retornamos (se maneja dentro del try)
+                # Si fallaron las keys para este modelo de OpenRouter, el bucle avanzará al siguiente modelo free
+                if key_attempts_succeeded:
                     break
 
         # Todos los providers fallaron — log detallado para diagnóstico
@@ -516,6 +634,13 @@ class ProviderRouterService:
             return _call_gemini(**kwargs)
         elif provider == "openrouter":
             return _call_openrouter(**kwargs)
+        elif provider in OPENAI_COMPATIBLE_PROVIDERS:
+            base_url = OPENAI_COMPATIBLE_PROVIDERS[provider]
+            return _call_openai_compatible(
+                provider=provider,
+                base_url=base_url,
+                **kwargs
+            )
         else:
             raise ValueError(f"Provider desconocido: {provider}")
 

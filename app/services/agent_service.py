@@ -42,6 +42,8 @@ class AgentService:
         base_tier: str,
         system_instructions: str,
         is_public: bool = False,
+        preferred_provider: Optional[str] = None,
+        preferred_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Crea un agente y su primera versión (v1) de perfil AFT.
@@ -85,10 +87,17 @@ class AgentService:
             raise ValueError("No se pudo crear el agente.")
 
         # 3. Crear la versión 1 del perfil
+        retrieval_profile = {}
+        if preferred_provider:
+            retrieval_profile["preferred_provider"] = preferred_provider
+        if preferred_model:
+            retrieval_profile["preferred_model"] = preferred_model
+
         version = self._create_version(
             agent_id=agent_id,
             version_number=1,
             system_instructions=system_instructions,
+            retrieval_profile=retrieval_profile,
         )
 
         # 4. Vincular el agente a su versión activa
@@ -195,11 +204,41 @@ class AgentService:
         self._require_supabase()
         self._assert_owner(agent_id, user_id)
 
+        # Si se actualizan preferred_provider o preferred_model, guardarlos en la versión actual
+        preferred_provider = fields.get("preferred_provider")
+        preferred_model = fields.get("preferred_model")
+        
+        if preferred_provider is not None or preferred_model is not None:
+            try:
+                agent_curr_resp = self.supabase.table("custom_agents").select("current_version_id").eq("id", agent_id).execute()
+                if agent_curr_resp.data and agent_curr_resp.data[0].get("current_version_id"):
+                    v_id = agent_curr_resp.data[0]["current_version_id"]
+                    version_data = self._get_version_by_id(v_id)
+                    if version_data:
+                        rp = version_data.get("retrieval_profile") or {}
+                        if preferred_provider is not None:
+                            rp["preferred_provider"] = preferred_provider
+                        if preferred_model is not None:
+                            rp["preferred_model"] = preferred_model
+                        self.supabase.table("agent_versions").update({"retrieval_profile": rp}).eq("id", v_id).execute()
+            except Exception as e:
+                logger.error(f"Error actualizando preferencias de inferencia en versión actual del agente {agent_id}: {e}")
+
         allowed = {"name", "description", "category", "base_tier", "is_public"}
         update_data = {k: v for k, v in fields.items() if k in allowed and v is not None}
 
+        # Permitir bypass si solo se cambiaron preferred_provider o preferred_model y no hay campos generales
         if not update_data:
-            raise ValueError("No hay campos válidos para actualizar.")
+            # Recuperar el agente completo para retornar
+            try:
+                resp = self.supabase.table("custom_agents").select("*").eq("id", agent_id).execute()
+                agent = resp.data[0] if resp.data else {}
+                if agent.get("current_version_id"):
+                    agent["current_version"] = self._get_version_by_id(agent["current_version_id"])
+                return agent
+            except Exception as e:
+                logger.error(f"Error recuperando agente {agent_id} tras actualización de versión: {e}")
+                raise ValueError("No se pudo actualizar el agente.")
 
         try:
             resp = (

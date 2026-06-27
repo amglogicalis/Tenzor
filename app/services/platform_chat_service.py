@@ -149,6 +149,25 @@ class PlatformChatService:
         tier = agent.get("base_tier", "balanced")
         retrieval_profile = self._extract_retrieval_profile(agent)
 
+        # Cargar preferencias de proveedor y modelo del perfil del agente
+        preferred_provider = retrieval_profile.get("preferred_provider", None) if retrieval_profile else None
+        preferred_model = retrieval_profile.get("preferred_model", None) if retrieval_profile else None
+
+        # Cargar claves de usuario descifradas en memoria al iniciar la petición
+        from app.services.provider_keys_db_service import provider_keys_db_service
+        from app.services.provider_key_pool_service import key_pool
+        
+        user_keys = provider_keys_db_service.get_decrypted_user_keys(user_id)
+        for uk in user_keys:
+            key_pool.add_user_key(
+                key_id=uk["key_id"],
+                provider=uk["provider"],
+                api_key=uk["api_key"],
+                user_id=user_id,
+                label=uk["key_label"],
+                priority=10  # Claves de usuario tienen prioridad
+            )
+
         # 2. Sesión
         session = self._get_or_create_session(
             user_id=user_id, agent_id=agent_id,
@@ -214,15 +233,20 @@ class PlatformChatService:
 
         # 7. Llamar al router de providers
         try:
-            result = provider_router.infer(
-                messages=messages,
-                tier=tier,
-                user_id=user_id,
-                system_prompt=final_system_prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                force_provider=force_provider,
-            )
+            try:
+                result = provider_router.infer(
+                    messages=messages,
+                    tier=tier,
+                    user_id=user_id,
+                    system_prompt=final_system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    force_provider=force_provider,
+                    preferred_provider=preferred_provider,
+                    preferred_model=preferred_model,
+                )
+            finally:
+                key_pool.remove_user_keys(user_id)
         except InferenceError as e:
             logger.error(f"Chat InferenceError: {e} | tier={tier} | intentos={len(e.attempts)}")
             for a in e.attempts:
@@ -231,9 +255,12 @@ class PlatformChatService:
                     f"code={a.error_code} retry_after={a.retry_after} msg={a.error_msg[:200]}"
                 )
             providers_tried = list({a.provider for a in e.attempts})
+            pref_text = ""
+            if preferred_provider:
+                pref_text = f"Tu proveedor preferido ({preferred_provider}) no pudo responder en este momento. "
             raise ValueError(
-                f"No se pudo obtener respuesta del agente. "
-                f"Todos los providers est\u00e1n saturados. Intenta de nuevo en unos minutos. "
+                f"{pref_text}Todos los providers están saturados. "
+                f"Por favor, intenta de nuevo en unos minutos o añade más claves API en tu perfil. "
                 f"(providers intentados: {', '.join(providers_tried) or 'ninguno'})"
             )
 

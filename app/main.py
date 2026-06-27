@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import chat, admin, endpoints
-from app.routers import platform_auth, platform_agents, platform_knowledge, platform_chat, round_table
+from app.routers import platform_auth, platform_agents, platform_knowledge, platform_chat, round_table, platform_keys
 from app.routers import platform_compiler, crew
 from app import config
 
@@ -42,6 +42,7 @@ app.include_router(platform_auth.router)
 app.include_router(platform_agents.router)
 app.include_router(platform_knowledge.router)
 app.include_router(platform_chat.router)
+app.include_router(platform_keys.router)
 app.include_router(round_table.router)
 app.include_router(platform_compiler.router)
 app.include_router(crew.router)

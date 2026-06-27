@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Arzor AIs Platform</title>
   <meta name="description" content="Crea, personaliza y despliega agentes de IA especializados con la plataforma Arzor." />
+  <!-- Favicon / Web Icon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/logo_arzor.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/logo_arzor.png" />
+  <link rel="apple-touch-icon" href="/static/logo_arzor.png" />
+  <meta name="theme-color" content="#e50914" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -427,6 +432,64 @@
     .synthesis-box { background: rgba(229,9,20,0.06); border: 1px solid rgba(229,9,20,0.25); border-radius: var(--radius-md); padding: 20px; margin-top: 20px; }
     .synthesis-label { font-size: 12px; font-weight: 600; color: var(--primary-light); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
     .synthesis-content { font-size: 14px; line-height: 1.7; }
+
+    /* ── Model Select & Dropdown ─────────────────────────────────────────── */
+    .model-select-wrapper { position: relative; width: 100%; }
+    .models-dropdown-list {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-md); max-height: 220px; overflow-y: auto;
+      z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      display: flex; flex-direction: column;
+    }
+    .model-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; font-size: 13px; cursor: pointer; color: var(--text-2);
+      transition: background 0.2s; border-bottom: 1px solid rgba(255,255,255,0.02);
+    }
+    .model-item:hover { background: var(--bg-hover); color: var(--text-1); }
+    .model-item-provider {
+      font-size: 11px; padding: 2px 6px; border-radius: 4px;
+      font-weight: 500; text-transform: uppercase;
+    }
+    .provider-google { background: rgba(66, 133, 244, 0.15); color: #4285f4; }
+    .provider-groq { background: rgba(0, 245, 156, 0.15); color: #00f59c; }
+    .provider-openrouter { background: rgba(255, 102, 0, 0.15); color: #ff6600; }
+    .provider-xai { background: rgba(255, 255, 255, 0.1); color: #ffffff; }
+    .provider-perplexity { background: rgba(0, 168, 150, 0.15); color: #00a896; }
+    .provider-deepseek { background: rgba(26, 115, 232, 0.15); color: #1a73e8; }
+    .provider-together { background: rgba(200, 50, 255, 0.15); color: #c832ff; }
+    .provider-fireworks { background: rgba(255, 0, 100, 0.15); color: #ff0064; }
+    .provider-mistral { background: rgba(255, 120, 0, 0.15); color: #ff7800; }
+    .provider-sambanova { background: rgba(255, 215, 0, 0.15); color: #ffd700; }
+    .provider-cerebras { background: rgba(0, 200, 255, 0.15); color: #00c8ff; }
+    .provider-siliconflow { background: rgba(50, 255, 180, 0.15); color: #32ffb4; }
+    .model-item-free-badge {
+      font-size: 9px; font-weight: 700; color: #00f59c; border: 1px solid #00f59c;
+      padding: 0 4px; border-radius: 3px; margin-left: 6px; text-transform: uppercase;
+    }
+
+    /* ── Profile Keys Panel ──────────────────────────────────────────────── */
+    .profile-container { display: flex; flex-direction: column; gap: 24px; padding: 12px 0; }
+    .profile-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }
+    .profile-card-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text-1); display: flex; align-items: center; gap: 8px; }
+    .profile-keys-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+    .profile-key-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+    }
+    .profile-key-info { display: flex; flex-direction: column; gap: 4px; }
+    .profile-key-label { font-size: 14px; font-weight: 600; color: var(--text-1); }
+    .profile-key-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); }
+    .status-badge { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+    .status-active { background: rgba(0, 245, 156, 0.1); color: #00f59c; }
+    .key-actions { display: flex; gap: 8px; }
+    
+    .add-key-form-grid { display: grid; grid-template-columns: 140px 1fr 1fr; gap: 12px; align-items: flex-end; }
+    @media (max-width: 600px) {
+      .add-key-form-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -702,6 +765,64 @@
       </div>
     </div>
 
+    <!-- Profile Page -->
+    <div class="page" id="page-profile">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Mi Perfil y Proveedores</div>
+          <div class="page-subtitle">Gestiona tus claves de API para habilitar tus propios modelos (BYOK)</div>
+        </div>
+      </div>
+      
+      <div class="profile-container">
+        <!-- API Keys Management Card -->
+        <div class="profile-card">
+          <div class="profile-card-title">
+            <span>🔑</span> Claves de API del Proveedor
+          </div>
+          
+          <div class="profile-keys-list" id="profile-keys-list">
+            <!-- Cargado dinámicamente -->
+            <div style="text-align:center; padding:20px; color:var(--text-3)">Cargando tus claves configuradas...</div>
+          </div>
+          
+          <hr style="border:0; border-top:1px solid var(--border); margin:24px 0" />
+          
+          <div style="font-size:14px; font-weight:700; margin-bottom:16px; color:var(--text-1)">Añadir nueva clave</div>
+          <div class="add-key-form-grid">
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Proveedor</label>
+              <select id="key-provider" style="background:var(--bg-input)">
+                <option value="google">Google Gemini</option>
+                <option value="groq">Groq</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="xai">xAI Grok</option>
+                <option value="perplexity">Perplexity</option>
+                <option value="mistral">Mistral AI</option>
+                <option value="together">Together AI</option>
+                <option value="fireworks">Fireworks AI</option>
+                <option value="cerebras">Cerebras</option>
+                <option value="sambanova">SambaNova</option>
+                <option value="siliconflow">SiliconFlow</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Nombre/Etiqueta</label>
+              <input type="text" id="key-label" placeholder="Ej: Mi Clave Personal" style="background:var(--bg-input)" />
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Clave API</label>
+              <input type="password" id="key-api-key" placeholder="AQ... o gsk_..." style="background:var(--bg-input)" />
+            </div>
+          </div>
+          <div style="margin-top:16px; display:flex; justify-content:flex-end">
+            <button class="btn btn-purple" onclick="addProviderKey()">Añadir Clave</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -735,13 +856,20 @@
             <option value="custom">Custom</option>
           </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Tier</label>
-          <select id="ca-tier">
-            <option value="fast">Fast (Groq)</option>
-            <option value="balanced" selected>Balanced</option>
-            <option value="pro">Pro (Gemini)</option>
-          </select>
+        <div class="form-group" style="position:relative">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+            <label class="form-label" style="margin:0">Modelo y Proveedor</label>
+            <button class="btn btn-ghost" style="padding: 2px 8px; font-size: 11px; height: auto; border: 1px solid var(--border)" onclick="recommendModelForAgent()">Recomendar ✨</button>
+          </div>
+          <div class="model-select-wrapper">
+            <input type="text" id="ca-model-search" placeholder="Selecciona un modelo..." onclick="toggleModelsDropdown(true)" oninput="filterModelsDropdown()" readonly style="cursor:pointer; background: var(--bg-input);" />
+            <input type="hidden" id="ca-model-id" value="gemini-2.0-flash" />
+            <input type="hidden" id="ca-provider" value="google" />
+            <input type="hidden" id="ca-tier" value="balanced" />
+            <div id="ca-models-dropdown" class="models-dropdown-list" style="display:none">
+              <!-- Cargado dinámicamente -->
+            </div>
+          </div>
         </div>
       </div>
       <div class="form-group">
@@ -938,6 +1066,7 @@ const PAGE_LOADERS = {
   chat: loadChatPage,
   roundtable: loadRoundTables,
   knowledge: loadKnowledgePage,
+  profile: loadProfilePage,
 };
 
 function navigate(page) {
@@ -1018,7 +1147,20 @@ function renderAgentGrid(gridId, agents, showActions = false) {
 }
 
 function openCreateAgent() {
+  // Limpiar campos
+  document.getElementById('ca-name').value = '';
+  document.getElementById('ca-desc').value = '';
+  document.getElementById('ca-instructions').value = '';
+  document.getElementById('ca-public').checked = false;
+  
+  // Resetear modelo seleccionado por defecto
+  document.getElementById('ca-model-id').value = 'gemini-2.0-flash';
+  document.getElementById('ca-provider').value = 'google';
+  document.getElementById('ca-model-search').value = 'Gemini 2.0 Flash (google)';
+  document.getElementById('ca-tier').value = 'balanced';
+  
   openModal('modal-create-agent');
+  loadAvailableModels();
 }
 
 async function createAgent() {
@@ -1034,6 +1176,8 @@ async function createAgent() {
       base_tier: document.getElementById('ca-tier').value,
       system_instructions: instructions,
       is_public: document.getElementById('ca-public').checked,
+      preferred_provider: document.getElementById('ca-provider').value,
+      preferred_model: document.getElementById('ca-model-id').value,
     });
     closeModal('modal-create-agent');
     toast('Agente creado y compilado correctamente ✅', 'success');
@@ -1147,14 +1291,22 @@ function renderMessages(msgs) {
 
 function renderMessage(role, content, msgId = null, metadata = {}) {
   const cached = metadata?.cached ? ' <span title="Respuesta cacheada" style="opacity:0.5">⚡</span>' : '';
-  const provider = metadata?.provider && metadata.provider !== 'cache' ? `<span>${metadata.provider}</span>` : '';
+  let providerInfo = '';
+  if (metadata?.provider && metadata.provider !== 'cache') {
+    const model = metadata.model ? ` / ${metadata.model}` : '';
+    const latency = metadata.latency_ms ? ` (${Math.round(metadata.latency_ms)}ms)` : '';
+    providerInfo = `<span style="font-size:11px; opacity:0.7; display:inline-flex; align-items:center; gap:6px">
+      <span class="model-item-provider provider-${metadata.provider}" style="font-size:9px; padding:1px 5px; border-radius:3px; font-weight:700">${metadata.provider}</span>
+      <span style="font-family:monospace">${model}${latency}</span>
+    </span>`;
+  }
   return `
     <div class="message ${role}">
       <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
       <div>
         <div class="message-bubble">${esc(content).replace(/\n/g,'<br/>')}</div>
-        ${role === 'assistant' ? `<div class="message-meta">
-          ${provider}${cached}
+        ${role === 'assistant' ? `<div class="message-meta" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+          ${providerInfo}${cached}
           ${msgId ? `<span class="feedback-btn" onclick="sendFeedback('${msgId}',1)" title="Positivo">👍</span>
           <span class="feedback-btn" onclick="sendFeedback('${msgId}',-1)" title="Negativo">👎</span>` : ''}
         </div>` : ''}
@@ -1231,7 +1383,7 @@ async function sendMessage() {
     removeTyping(typingId);
     state.currentSessionId = data.session_id;
     appendMessageEl(renderMessage('assistant', data.content, data.message_id, {
-      provider: data.provider, model: data.model, cached: data.provider === 'cache'
+      provider: data.provider, model: data.model, latency_ms: data.latency_ms, cached: data.provider === 'cache'
     }));
     loadSessions();
   } catch(e) {
@@ -1462,6 +1614,263 @@ function formatDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString('es-ES', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PLATFORM KEYS & MODEL MANAGEMENT (BYOK & RECOMMENDER)
+// ═══════════════════════════════════════════════════════════════════════
+state.availableModels = [];
+
+async function loadProfilePage() {
+  const container = document.getElementById('profile-keys-list');
+  try {
+    const keys = await api('GET', '/platform/keys');
+    if (!keys || keys.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:30px; color:var(--text-3)">
+          <div style="font-size:32px; margin-bottom:12px">🔑</div>
+          No tienes claves de API personales configuradas.
+          <div style="font-size:12px; margin-top:6px">Se usarán las claves de API del sistema por defecto.</div>
+        </div>
+      `;
+      return;
+    }
+    
+    container.innerHTML = keys.map(k => `
+      <div class="profile-key-item">
+        <div class="profile-key-info">
+          <div class="profile-key-label">${esc(k.key_label)}</div>
+          <div class="profile-key-meta">
+            <span class="model-item-provider provider-${k.provider}">${k.provider}</span>
+            <span>• Enmascarada: <code>${esc(k.masked_key)}</code></span>
+            <span>• Creada: ${formatDate(k.created_at)}</span>
+          </div>
+        </div>
+        <div class="key-actions">
+          <div class="status-badge status-active">
+            <span>●</span> Activa
+          </div>
+          <button class="btn btn-sm btn-danger" onclick="deleteProviderKey('${k.id}')">🗑️ Eliminar</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    container.innerHTML = `<div style="color:var(--danger); text-align:center; padding:20px">Error al cargar claves: ${esc(e.message)}</div>`;
+  }
+}
+
+async function addProviderKey() {
+  const provider = document.getElementById('key-provider').value;
+  const label = document.getElementById('key-label').value.trim();
+  const apiKey = document.getElementById('key-api-key').value.trim();
+  
+  if (!apiKey) {
+    toast('La clave API es requerida', 'error');
+    return;
+  }
+  
+  try {
+    await api('POST', '/platform/keys', {
+      provider: provider,
+      key_label: label || `Clave de ${provider}`,
+      api_key: apiKey
+    });
+    toast('Clave de API añadida correctamente', 'success');
+    document.getElementById('key-label').value = '';
+    document.getElementById('key-api-key').value = '';
+    loadProfilePage();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function deleteProviderKey(keyId) {
+  if (!confirm('¿Estás seguro de que deseas eliminar esta clave de API? Tus agentes que dependan de ella podrían fallar si no hay claves de sistema disponibles.')) {
+    return;
+  }
+  try {
+    await api('DELETE', `/platform/keys/${keyId}`);
+    toast('Clave de API eliminada', 'success');
+    loadProfilePage();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// Dropdown de modelos
+async function loadAvailableModels() {
+  const dropdown = document.getElementById('ca-models-dropdown');
+  try {
+    const models = await api('GET', '/platform/keys/models/available');
+    state.availableModels = models || [];
+    renderModelsList(state.availableModels);
+  } catch (e) {
+    console.error("Error al cargar modelos disponibles:", e);
+    dropdown.innerHTML = `<div style="padding:10px; color:var(--danger)">Error al cargar modelos</div>`;
+  }
+}
+
+function renderModelsList(models) {
+  const dropdown = document.getElementById('ca-models-dropdown');
+  if (!models || models.length === 0) {
+    dropdown.innerHTML = `<div style="padding:12px; color:var(--text-3); font-size:12px">No hay modelos disponibles. Configura una clave de API.</div>`;
+    return;
+  }
+  
+  dropdown.innerHTML = models.map(m => `
+    <div class="model-item" onclick="selectModel('${m.id}', '${m.provider}', '${m.name}')">
+      <div>
+        <span>${esc(m.name)}</span>
+        ${m.free ? '<span class="model-item-free-badge">FREE</span>' : ''}
+      </div>
+      <span class="model-item-provider provider-${m.provider}">${m.provider}</span>
+    </div>
+  `).join('');
+}
+
+function toggleModelsDropdown(show) {
+  const dropdown = document.getElementById('ca-models-dropdown');
+  if (show) {
+    dropdown.style.display = 'flex';
+    // Cerrar al hacer clic fuera
+    setTimeout(() => {
+      document.addEventListener('click', closeDropdownOnOutsideClick);
+    }, 10);
+  } else {
+    dropdown.style.display = 'none';
+    document.removeEventListener('click', closeDropdownOnOutsideClick);
+  }
+}
+
+function closeDropdownOnOutsideClick(e) {
+  const dropdown = document.getElementById('ca-models-dropdown');
+  const searchInput = document.getElementById('ca-model-search');
+  if (!dropdown.contains(e.target) && e.target !== searchInput) {
+    toggleModelsDropdown(false);
+  }
+}
+
+function filterModelsDropdown() {
+  const text = document.getElementById('ca-model-search').value.toLowerCase().trim();
+  const searchInput = document.getElementById('ca-model-search');
+  searchInput.removeAttribute('readonly');
+  
+  const filtered = state.availableModels.filter(m => 
+    m.name.toLowerCase().includes(text) || 
+    m.id.toLowerCase().includes(text) || 
+    m.provider.toLowerCase().includes(text)
+  );
+  renderModelsList(filtered);
+}
+
+// Permitir escribir al filtrar y readonly al cerrar
+document.addEventListener('DOMContentLoaded', () => {
+  const searchEl = document.getElementById('ca-model-search');
+  if (searchEl) {
+    searchEl.addEventListener('blur', () => {
+      setTimeout(() => {
+        searchEl.setAttribute('readonly', true);
+      }, 150);
+    });
+    searchEl.addEventListener('focus', () => {
+      searchEl.removeAttribute('readonly');
+    });
+  }
+});
+
+function selectModel(modelId, provider, modelName) {
+  document.getElementById('ca-model-id').value = modelId;
+  document.getElementById('ca-provider').value = provider;
+  document.getElementById('ca-model-search').value = `${modelName} (${provider})`;
+  
+  // Mapear tier de forma compatible
+  let tier = 'balanced';
+  if (provider === 'groq') {
+    tier = 'fast';
+  } else if (provider === 'google' && (modelId.includes('pro') || modelId.includes('2.5'))) {
+    tier = 'pro';
+  }
+  document.getElementById('ca-tier').value = tier;
+  
+  toggleModelsDropdown(false);
+}
+
+// Asistente de recomendación
+async function recommendModelForAgent() {
+  const spec = document.getElementById('ca-instructions').value.trim();
+  if (spec.length < 10) {
+    toast('Por favor, escribe primero al menos una breve descripción en las instrucciones del agente para poder recomendar modelos.', 'error');
+    return;
+  }
+  
+  const btn = event ? event.target : null;
+  const originalHtml = btn ? btn.innerHTML : 'Recomendar ✨';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'Recomendando...';
+  }
+  
+  try {
+    const recommendations = await api('POST', '/platform/keys/recommend', {
+      specialization: spec
+    });
+    
+    if (!recommendations || recommendations.length === 0) {
+      toast('No se pudieron obtener recomendaciones.', 'error');
+      return;
+    }
+    
+    // Crear un diálogo modal/popover rápido con las recomendaciones
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'temp-recommendation-modal';
+    
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:500px">
+        <div class="modal-header">
+          <div class="modal-title">Recomendaciones del Asistente Arzor 🤖</div>
+          <button class="modal-close" onclick="document.getElementById('temp-recommendation-modal').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="gap:16px">
+          <div style="font-size:13px; color:var(--text-2); margin-bottom:8px">
+            Basado en las instrucciones de tu agente, te recomendamos los siguientes 3 modelos disponibles:
+          </div>
+          ${recommendations.map((r, i) => `
+            <div class="card" style="padding:14px; cursor:pointer; border:1px solid var(--border); transition:all 0.2s" 
+                 onclick="applyRecommendation('${r.model}', '${r.provider}', '${esc(r.model)}')"
+                 onmouseover="this.style.borderColor='var(--primary-light)'" 
+                 onmouseout="this.style.borderColor='var(--border)'">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+                <span style="font-weight:700; font-size:14px; color:var(--text-1)">#${i+1} ${esc(r.model)}</span>
+                <span class="model-item-provider provider-${r.provider}">${r.provider}</span>
+              </div>
+              <div style="font-size:12px; color:var(--text-2); line-height:1.5">${esc(r.reason)}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="document.getElementById('temp-recommendation-modal').remove()">Cerrar</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Función global temporal para aplicar la recomendación
+    window.applyRecommendation = (modelId, provider, modelName) => {
+      selectModel(modelId, provider, modelName);
+      document.getElementById('temp-recommendation-modal').remove();
+      toast(`Modelo ${modelName} pre-configurado con éxito`, 'success');
+    };
+    
+  } catch (e) {
+    toast('Error en el asistente: ' + e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
 }
 
 // Close modals on overlay click

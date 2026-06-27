@@ -57,10 +57,10 @@ class CreateAgentRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     category: str = Field(..., pattern=r"^(dev|data|ops|creative|science|custom)$")
     base_tier: str = Field("balanced", pattern=r"^(fast|balanced|pro)$")
-    # Instrucciones en lenguaje natural para el compilador AFT (Fase 3)
-    # En Fase 2 se guardan tal cual como system_instructions de la v1
     system_instructions: str = Field(..., min_length=20, max_length=8000)
     is_public: bool = False
+    preferred_provider: Optional[str] = Field(None, pattern=r"^(google|groq|openrouter)$")
+    preferred_model: Optional[str] = Field(None, max_length=100)
 
 
 class UpdateAgentRequest(BaseModel):
@@ -69,6 +69,8 @@ class UpdateAgentRequest(BaseModel):
     category: Optional[str] = Field(None, pattern=r"^(dev|data|ops|creative|science|custom)$")
     base_tier: Optional[str] = Field(None, pattern=r"^(fast|balanced|pro)$")
     is_public: Optional[bool] = None
+    preferred_provider: Optional[str] = Field(None, pattern=r"^(google|groq|openrouter)$")
+    preferred_model: Optional[str] = Field(None, max_length=100)
 
 
 class AgentVersionResponse(BaseModel):
