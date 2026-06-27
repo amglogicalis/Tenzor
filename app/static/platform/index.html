@@ -1971,8 +1971,8 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     constructor() {
       this.x = Math.random() * width;
       this.y = Math.random() * height;
-      this.vx = (Math.random() - 0.5) * 0.4;
-      this.vy = (Math.random() - 0.5) * 0.4;
+      this.vx = (Math.random() - 0.5) * 0.25;
+      this.vy = (Math.random() - 0.5) * 0.25;
       
       this.baseSize = Math.random() * 2.2 + 1.2;
       this.size = this.baseSize;
@@ -1982,11 +1982,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
       this.orbitSpeed = (Math.random() * 0.03 + 0.015) * (Math.random() < 0.5 ? 1 : -1);
       
       this.pulsePhase = Math.random() * Math.PI * 2;
-      this.pulseSpeed = Math.random() * 0.03 + 0.01;
-      
-      // Propiedades de la constante gravitatoria del centro de la pantalla
-      this.homeAngle = Math.random() * Math.PI * 2;
-      this.homeRadius = Math.random() * (Math.min(width, height) * 0.44) + 40;
+      this.pulseSpeed = Math.random() * 0.025 + 0.01;
     }
     
     update(mx, my, velocityNorm) {
@@ -1997,18 +1993,19 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
       const centerX = width / 2;
       const centerY = height / 2;
       
-      const returnToCenter = () => {
-        this.homeAngle += this.orbitSpeed * 0.25;
-        const targetHomeRadius = this.homeRadius + Math.sin(this.pulsePhase) * 25;
-        const targetX = centerX + Math.cos(this.homeAngle) * targetHomeRadius;
-        const targetY = centerY + Math.sin(this.homeAngle) * targetHomeRadius;
+      const defaultDrift = () => {
+        this.x += this.vx;
+        this.y += this.vy;
         
-        this.x += (targetX - this.x) * 0.025 + this.vx;
-        this.y += (targetY - this.y) * 0.025 + this.vy;
+        const borderMargin = 60;
+        if (this.x < borderMargin || this.x > width - borderMargin || this.y < borderMargin || this.y > height - borderMargin) {
+          this.x += (centerX - this.x) * 0.005;
+          this.y += (centerY - this.y) * 0.005;
+        }
       };
       
       if (mx < 0) {
-        returnToCenter();
+        defaultDrift();
         return;
       }
       
@@ -2037,7 +2034,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
         this.x += pushX;
         this.y += pushY;
       } else {
-        returnToCenter();
+        defaultDrift();
       }
     }
     
