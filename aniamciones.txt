@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clon de Antigravedad</title>
+    <style>
+        /* Reseteamos el fondo para que ocupe toda la pantalla sin barras de scroll */
+        body { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background: #ffffff; 
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+</head>
+<body>
+    <script>
+        // 1. Configuración básica del motor de físicas
+        const Engine = Matter.Engine,
+              Render = Matter.Render,
+              Runner = Matter.Runner,
+              Bodies = Matter.Bodies,
+              Composite = Matter.Composite,
+              Mouse = Matter.Mouse,
+              MouseConstraint = Matter.MouseConstraint;
+
+        // Creamos el "mundo"
+        const engine = Engine.create();
+        
+        // 2. EL SECRETO: Desactivar la gravedad
+        engine.world.gravity.y = 0; // Gravedad vertical cero
+        engine.world.gravity.x = 0; // Gravedad horizontal cero
+
+        // Configuramos cómo se va a dibujar en pantalla
+        const render = Render.create({
+            element: document.body,
+            engine: engine,
+            options: {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                wireframes: false, // Queremos ver colores, no solo las líneas
+                background: '#ffffff'
+            }
+        });
+
+        // 3. Crear los elementos (Como si fueran el logo de Google y la barra de búsqueda)
+        // Bodies.rectangle(x, y, ancho, alto, opciones)
+        const logo = Bodies.rectangle(window.innerWidth/2, window.innerHeight/2 - 100, 250, 80, { 
+            render: { fillStyle: '#4285F4' }, // Azul Google
+            frictionAir: 0.02 // Fricción del aire para que no floten infinitamente rápido
+        });
+        
+        const barraBusqueda = Bodies.rectangle(window.innerWidth/2, window.innerHeight/2, 500, 50, { 
+            render: { fillStyle: '#eeeeee' }, // Gris claro
+            frictionAir: 0.02 
+        });
+        
+        const boton1 = Bodies.rectangle(window.innerWidth/2 - 100, window.innerHeight/2 + 100, 150, 40, { 
+            render: { fillStyle: '#EA4335' }, // Rojo Google
+            frictionAir: 0.02 
+        });
+
+        const boton2 = Bodies.rectangle(window.innerWidth/2 + 100, window.innerHeight/2 + 100, 150, 40, { 
+            render: { fillStyle: '#FBBC05' }, // Amarillo Google
+            frictionAir: 0.02 
+        });
+        
+        // 4. Crear "paredes" invisibles para que los elementos no se salgan de la pantalla
+        const opcionesPared = { isStatic: true, render: { visible: false } };
+        const suelo = Bodies.rectangle(window.innerWidth/2, window.innerHeight + 25, window.innerWidth, 50, opcionesPared);
+        const techo = Bodies.rectangle(window.innerWidth/2, -25, window.innerWidth, 50, opcionesPared);
+        const paredIzq = Bodies.rectangle(-25, window.innerHeight/2, 50, window.innerHeight, opcionesPared);
+        const paredDer = Bodies.rectangle(window.innerWidth + 25, window.innerHeight/2, 50, window.innerHeight, opcionesPared);
+
+        // Añadimos todo al mundo
+        Composite.add(engine.world, [logo, barraBusqueda, boton1, boton2, suelo, techo, paredIzq, paredDer]);
+
+        // 5. Añadir interacción con el ratón (La capacidad de agarrar y lanzar)
+        const mouse = Mouse.create(render.canvas);
+        const mouseConstraint = MouseConstraint.create(engine, {
+            mouse: mouse,
+            constraint: {
+                stiffness: 0.2, // Qué tan "rígido" es el agarre
+                render: { visible: false }
+            }
+        });
+
+        Composite.add(engine.world, mouseConstraint);
+        
+        // Sincronizar el scroll del ratón con el motor (evita bugs de posición)
+        render.mouse = mouse;
+
+        // 6. Ejecutar el motor y el renderizador
+        Render.run(render);
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+
+        // Dar un pequeño "empujón" inicial para que empiecen a flotar
+        Matter.Body.applyForce(logo, logo.position, { x: 0.05, y: -0.05 });
+    </script>
+</body>
+</html>
+
+Entendido. Si vas a integrar esta animación dentro de una página más grande, un sistema de vistas o un framework (como React, Vue, Next.js, etc.), no puedes usar el código aislado que manipula directamente el body o la ventana completa.
+
+Si el código no está aislado, hay tres reglas de oro que debes aplicar para que no rompa el resto de tu página de render:
+
+1. Encapsular en un contenedor específico
+En lugar de inyectar el lienzo en todo el documento, debes decirle al motor que solo renderice dentro de un div específico. En Matter.js, esto se hace cambiando la propiedad element.
+
+2. Dimensiones relativas, no absolutas
+No debes usar window.innerWidth para el ancho, sino el ancho exacto del contenedor padre donde vas a meter la animación. De lo contrario, el lienzo se desbordará y romperá tu diseño.
+
+3. Limpieza de memoria (Cleanup)
+Si tu página cambia de vista o desmonta el componente, debes destruir el motor de físicas y el evento del ratón. Si no lo haces, la animación seguirá calculando matemáticas en segundo plano y ralentizará tu web (fuga de memoria).
+
+Código adaptado para módulos o componentes
+Aquí tienes la versión modular. En lugar de ejecutarse sola, es una función que puedes llamar pasándole el ID del div donde quieres que viva.
+
+JavaScript
+// Asegúrate de importar Matter.js en tu proyecto (por npm o CDN)
+
+export function iniciarAntigravedad(contenedorId) {
+    const contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+
+    const Engine = Matter.Engine,
+          Render = Matter.Render,
+          Runner = Matter.Runner,
+          Bodies = Matter.Bodies,
+          Composite = Matter.Composite,
+          Mouse = Matter.Mouse,
+          MouseConstraint = Matter.MouseConstraint;
+
+    const engine = Engine.create();
+    engine.world.gravity.y = 0;
+    engine.world.gravity.x = 0;
+
+    // Tomamos las medidas del contenedor en lugar de la ventana completa
+    const ancho = contenedor.clientWidth;
+    const alto = contenedor.clientHeight;
+
+    const render = Render.create({
+        element: contenedor, // Aquí lo inyectamos solo en tu div
+        engine: engine,
+        options: {
+            width: ancho,
+            height: alto,
+            wireframes: false,
+            background: 'transparent' // Transparente para que se vea el fondo de tu web
+        }
+    });
+
+    // Creamos elementos de ejemplo proporcionados al tamaño del contenedor
+    const caja1 = Bodies.rectangle(ancho * 0.3, alto * 0.5, 100, 50, { render: { fillStyle: '#4285F4' }, frictionAir: 0.02 });
+    const caja2 = Bodies.rectangle(ancho * 0.6, alto * 0.5, 150, 40, { render: { fillStyle: '#EA4335' }, frictionAir: 0.02 });
+
+    const opcionesPared = { isStatic: true, render: { visible: false } };
+    const suelo = Bodies.rectangle(ancho/2, alto + 25, ancho, 50, opcionesPared);
+    const techo = Bodies.rectangle(ancho/2, -25, ancho, 50, opcionesPared);
+    const paredIzq = Bodies.rectangle(-25, alto/2, 50, alto, opcionesPared);
+    const paredDer = Bodies.rectangle(ancho + 25, alto/2, 50, alto, opcionesPared);
+
+    Composite.add(engine.world, [caja1, caja2, suelo, techo, paredIzq, paredDer]);
+
+    const mouse = Mouse.create(render.canvas);
+    const mouseConstraint = MouseConstraint.create(engine, {
+        mouse: mouse,
+        constraint: { stiffness: 0.2, render: { visible: false } }
+    });
+
+    Composite.add(engine.world, mouseConstraint);
+    render.mouse = mouse;
+
+    Render.run(render);
+    const runner = Runner.create();
+    Runner.run(runner, engine);
+    
+    Matter.Body.applyForce(caja1, caja1.position, { x: 0.02, y: -0.02 });
+
+    // Función de limpieza para usar cuando desmontes el componente
+    return function limpiarAnimacion() {
+        Render.stop(render);
+        Runner.stop(runner);
+        render.canvas.remove();
+        render.canvas = null;
+        render.context = null;
+        render.textures = {};
+    };
+}

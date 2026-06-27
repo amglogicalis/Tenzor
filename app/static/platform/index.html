@@ -1914,7 +1914,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
-// ANTIGRAVITY INTERACTIVE PARTICLE ENGINE (White to Crimson/Red tones)
+// OFFICIAL ANTIGRAVITY PARTICLE CIRCLE ENGINE (Follows Cursor + Compress/Expand)
 // ═══════════════════════════════════════════════════════════════════════
 (function() {
   const canvas = document.getElementById('bg-particles-canvas');
@@ -1929,85 +1929,69 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     height = canvas.height = window.innerHeight;
   });
   
-  const mouse = { x: -1000, y: -1000, radius: 170 };
+  const realMouse = { x: width / 2, y: height / 2 };
+  const smoothMouse = { x: width / 2, y: height / 2 };
+  let mouseVelocity = 0;
+  
   window.addEventListener('mousemove', (e) => {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-  });
-  window.addEventListener('mouseleave', () => {
-    mouse.x = -1000;
-    mouse.y = -1000;
+    const dx = e.clientX - realMouse.x;
+    const dy = e.clientY - realMouse.y;
+    mouseVelocity = Math.sqrt(dx * dx + dy * dy);
+    realMouse.x = e.clientX;
+    realMouse.y = e.clientY;
   });
   
-  const PARTICLE_COUNT = Math.min(130, Math.floor(window.innerWidth * 0.08));
+  const PARTICLE_COUNT = 180;
   const particles = [];
   
-  function getRandomParticleColor() {
-    const isWhite = Math.random() < 0.35;
+  function getRandomColor() {
+    const isWhite = Math.random() < 0.4;
     if (isWhite) {
-      const alpha = (Math.random() * 0.4 + 0.15).toFixed(2);
+      const alpha = (Math.random() * 0.45 + 0.15).toFixed(2);
       return `rgba(255, 255, 255, ${alpha})`;
     } else {
-      const hue = Math.random() < 0.5 ? Math.floor(Math.random() * 15 + 345) : Math.floor(Math.random() * 12);
+      const hue = Math.random() < 0.5 ? Math.floor(Math.random() * 15 + 345) : Math.floor(Math.random() * 15);
       const sat = Math.floor(Math.random() * 30 + 70);
-      const light = Math.floor(Math.random() * 40 + 40);
-      const alpha = (Math.random() * 0.5 + 0.2).toFixed(2);
+      const light = Math.floor(Math.random() * 40 + 45);
+      const alpha = (Math.random() * 0.55 + 0.25).toFixed(2);
       return `hsla(${hue}, ${sat}%, ${light}%, ${alpha})`;
     }
   }
   
-  class Particle {
+  class AntigravityParticle {
     constructor() {
-      this.x = Math.random() * width;
-      this.y = Math.random() * height;
-      this.baseX = this.x;
-      this.baseY = this.y;
-      this.vx = (Math.random() - 0.5) * 0.6;
-      this.vy = (Math.random() - 0.5) * 0.6;
-      this.size = Math.random() * 2.2 + 1.2;
-      this.baseSize = this.size;
-      this.color = getRandomParticleColor();
-      this.pulseAngle = Math.random() * Math.PI * 2;
-      this.pulseSpeed = Math.random() * 0.03 + 0.01;
+      this.angle = Math.random() * Math.PI * 2;
+      this.orbitSpeed = (Math.random() - 0.5) * 0.015;
+      this.baseRadius = Math.random() * 240 + 80;
+      this.radiusOffset = 0;
+      this.baseSize = Math.random() * 2.2 + 1.2;
+      this.size = this.baseSize;
+      this.color = getRandomColor();
+      this.pulsePhase = Math.random() * Math.PI * 2;
+      this.pulseSpeed = Math.random() * 0.025 + 0.01;
     }
     
-    update() {
-      this.x += this.vx;
-      this.y += this.vy;
+    update(centerX, centerY, velocityCompression) {
+      this.angle += this.orbitSpeed;
+      this.pulsePhase += this.pulseSpeed;
+      const breathing = Math.sin(this.pulsePhase) * 30;
+      const dynamicRadius = Math.max(20, (this.baseRadius + breathing) * (1 - velocityCompression * 0.45));
       
-      if (this.x < 0 || this.x > width) this.vx *= -1;
-      if (this.y < 0 || this.y > height) this.vy *= -1;
-      
-      this.pulseAngle += this.pulseSpeed;
-      const scale = 1 + Math.sin(this.pulseAngle) * 0.35;
-      this.size = this.baseSize * scale;
-      
-      const dx = mouse.x - this.x;
-      const dy = mouse.y - this.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      if (dist < mouse.radius && dist > 0) {
-        const force = (mouse.radius - dist) / mouse.radius;
-        const angle = Math.atan2(dy, dx);
-        const pushX = Math.cos(angle) * force * 3.5;
-        const pushY = Math.sin(angle) * force * 3.5;
-        
-        this.x -= pushX;
-        this.y -= pushY;
-        this.size = this.baseSize * (scale + force * 1.2);
-      }
+      this.x = centerX + Math.cos(this.angle) * dynamicRadius;
+      this.y = centerY + Math.sin(this.angle) * dynamicRadius;
+      this.size = Math.max(0.6, this.baseSize * (1 + Math.sin(this.pulsePhase) * 0.3 - velocityCompression * 0.3));
     }
     
     draw() {
       ctx.beginPath();
-      ctx.arc(this.x, this.y, Math.max(0.5, this.size), 0, Math.PI * 2);
+      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
       ctx.fillStyle = this.color;
       ctx.fill();
     }
   }
   
   for (let i = 0; i < PARTICLE_COUNT; i++) {
-    particles.push(new Particle());
+    particles.push(new AntigravityParticle());
   }
   
   let animationId = null;
@@ -2017,17 +2001,23 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     if (!isRunning) return;
     ctx.clearRect(0, 0, width, height);
     
-    for (let a = 0; a < particles.length; a++) {
-      for (let b = a + 1; b < particles.length; b++) {
+    smoothMouse.x += (realMouse.x - smoothMouse.x) * 0.07;
+    smoothMouse.y += (realMouse.y - smoothMouse.y) * 0.07;
+    
+    mouseVelocity *= 0.92;
+    const normalizedVel = Math.min(1, mouseVelocity / 60);
+    
+    for (let a = 0; a < particles.length; a += 2) {
+      for (let b = a + 1; b < particles.length; b += 2) {
         const dx = particles[a].x - particles[b].x;
         const dy = particles[a].y - particles[b].y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         
-        if (dist < 100) {
-          const alpha = ((1 - dist / 100) * 0.12).toFixed(3);
+        if (dist < 85) {
+          const alpha = ((1 - dist / 85) * 0.1).toFixed(3);
           ctx.beginPath();
           ctx.strokeStyle = `rgba(235, 57, 63, ${alpha})`;
-          ctx.lineWidth = 0.6;
+          ctx.lineWidth = 0.55;
           ctx.moveTo(particles[a].x, particles[a].y);
           ctx.lineTo(particles[b].x, particles[b].y);
           ctx.stroke();
@@ -2036,7 +2026,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     }
     
     particles.forEach(p => {
-      p.update();
+      p.update(smoothMouse.x, smoothMouse.y, normalizedVel);
       p.draw();
     });
     
