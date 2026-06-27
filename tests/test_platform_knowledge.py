@@ -281,6 +281,8 @@ class TestIngestFile:
             filename="guia.md",
             content_type="text/markdown",
             raw_bytes=SAMPLE_MD,
+            chunk_size=400,
+            chunk_overlap=100,
         )
         assert result["chunks_created"] >= 2
 

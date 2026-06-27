@@ -442,8 +442,15 @@ class PlatformChatService:
         for i, chunk in enumerate(chunks, 1):
             heading = getattr(chunk, "heading", None) or ""
             content = getattr(chunk, "content", str(chunk))
-            label = f"[{i}] {heading}" if heading else f"[{i}]"
-            lines.append(f"{label}\n{content}")
+            metadata = getattr(chunk, "metadata", {}) or {}
+            filename = metadata.get("filename", "desconocido")
+            
+            # Formato enriquecido con metadatos
+            header_label = f"Documento: {filename}"
+            if heading:
+                header_label += f" | Sección: {heading}"
+                
+            lines.append(f"--- FRAGMENTO [{i}] ({header_label}) ---\n{content}")
         return "\n\n".join(lines)
 
     def _get_or_create_session(

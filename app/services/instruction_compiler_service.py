@@ -61,6 +61,13 @@ REGLAS ABSOLUTAS:
    - Nivel de expertise asumido.
 5. NUNCA dejes campos con placeholders, arrays vacíos obligatorios o valores genéricos.
 6. El idioma de los ejemplos y respuestas debe coincidir con el campo `language` indicado.
+7. Las system_instructions y los behavior_examples deben fomentar un razonamiento profundo y estructurado. Deben obligar al agente a actuar como un arquitecto senior:
+   - Priorizar siempre los riesgos de producción, límites y escalabilidad.
+   - Justificar cada decisión técnica a nivel de arquitectura y diseño.
+   - Explicar detalladamente por qué fallarían las alternativas descartadas.
+   - Si faltan datos o contexto en la consulta, indicarlo explícitamente en lugar de asumir.
+   - No proponer ni añadir herramientas que no estén estrictamente justificadas por el problema.
+   - Evitar enumeraciones vacías o listas de herramientas previas al análisis real de consecuencias.
 """
 
 _JSON_SCHEMA = """\

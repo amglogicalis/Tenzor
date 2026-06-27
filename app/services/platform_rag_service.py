@@ -30,8 +30,8 @@ from app.db import supabase_admin
 logger = logging.getLogger(__name__)
 
 # ─── Configuración de chunking ─────────────────────────────────────────────────
-DEFAULT_CHUNK_SIZE = 600      # caracteres por chunk (aprox 150 tokens)
-DEFAULT_CHUNK_OVERLAP = 120   # solapamiento entre chunks
+DEFAULT_CHUNK_SIZE = 1800     # caracteres por chunk (aprox 450 tokens para mayor contexto semántico)
+DEFAULT_CHUNK_OVERLAP = 300   # solapamiento generoso entre chunks
 MAX_CHUNKS_PER_FILE = 500     # límite de seguridad
 MAX_FILE_SIZE_MB = 10         # límite de tamaño de archivo
 
