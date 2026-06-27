@@ -1971,8 +1971,8 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     constructor() {
       this.x = Math.random() * width;
       this.y = Math.random() * height;
-      this.vx = (Math.random() - 0.5) * 0.5;
-      this.vy = (Math.random() - 0.5) * 0.5;
+      this.vx = (Math.random() - 0.5) * 0.4;
+      this.vy = (Math.random() - 0.5) * 0.4;
       
       this.baseSize = Math.random() * 2.2 + 1.2;
       this.size = this.baseSize;
@@ -1983,6 +1983,10 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
       
       this.pulsePhase = Math.random() * Math.PI * 2;
       this.pulseSpeed = Math.random() * 0.03 + 0.01;
+      
+      // Propiedades de la constante gravitatoria del centro de la pantalla
+      this.homeAngle = Math.random() * Math.PI * 2;
+      this.homeRadius = Math.random() * (Math.min(width, height) * 0.44) + 40;
     }
     
     update(mx, my, velocityNorm) {
@@ -1990,11 +1994,21 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
       const breathing = Math.sin(this.pulsePhase) * 0.35;
       this.size = Math.max(0.6, this.baseSize * (1 + breathing));
       
+      const centerX = width / 2;
+      const centerY = height / 2;
+      
+      const returnToCenter = () => {
+        this.homeAngle += this.orbitSpeed * 0.25;
+        const targetHomeRadius = this.homeRadius + Math.sin(this.pulsePhase) * 25;
+        const targetX = centerX + Math.cos(this.homeAngle) * targetHomeRadius;
+        const targetY = centerY + Math.sin(this.homeAngle) * targetHomeRadius;
+        
+        this.x += (targetX - this.x) * 0.025 + this.vx;
+        this.y += (targetY - this.y) * 0.025 + this.vy;
+      };
+      
       if (mx < 0) {
-        this.x += this.vx;
-        this.y += this.vy;
-        if (this.x < 0 || this.x > width) this.vx *= -1;
-        if (this.y < 0 || this.y > height) this.vy *= -1;
+        returnToCenter();
         return;
       }
       
@@ -2023,10 +2037,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
         this.x += pushX;
         this.y += pushY;
       } else {
-        this.x += this.vx;
-        this.y += this.vy;
-        if (this.x < 0 || this.x > width) this.vx *= -1;
-        if (this.y < 0 || this.y > height) this.vy *= -1;
+        returnToCenter();
       }
     }
     
