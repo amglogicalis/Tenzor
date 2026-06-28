@@ -59,7 +59,7 @@ class CreateAgentRequest(BaseModel):
     base_tier: str = Field("balanced", pattern=r"^(fast|balanced|pro)$")
     system_instructions: str = Field(..., min_length=20, max_length=8000)
     is_public: bool = False
-    preferred_provider: Optional[str] = Field(None, pattern=r"^(google|groq|openrouter|deepseek|xai|perplexity|mistral|together|fireworks|cerebras|sambanova|siliconflow|cohere|anthropic)$")
+    preferred_provider: Optional[str] = Field(None, pattern=r"^(google|groq|openrouter|deepseek|xai|perplexity|mistral|together|fireworks|cerebras|sambanova|siliconflow|cohere|anthropic|nvidia|cloudflare|huggingface)$")
     preferred_model: Optional[str] = Field(None, max_length=100)
 
 
@@ -69,7 +69,7 @@ class UpdateAgentRequest(BaseModel):
     category: Optional[str] = Field(None, pattern=r"^(dev|data|ops|creative|science|custom)$")
     base_tier: Optional[str] = Field(None, pattern=r"^(fast|balanced|pro)$")
     is_public: Optional[bool] = None
-    preferred_provider: Optional[str] = Field(None, pattern=r"^(google|groq|openrouter|deepseek|xai|perplexity|mistral|together|fireworks|cerebras|sambanova|siliconflow|cohere|anthropic)$")
+    preferred_provider: Optional[str] = Field(None, pattern=r"^(google|groq|openrouter|deepseek|xai|perplexity|mistral|together|fireworks|cerebras|sambanova|siliconflow|cohere|anthropic|nvidia|cloudflare|huggingface)$")
     preferred_model: Optional[str] = Field(None, max_length=100)
 
 

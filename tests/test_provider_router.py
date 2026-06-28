@@ -474,3 +474,50 @@ class TestProviderRouter:
                 force_provider="openrouter",
             )
         assert result.provider == "openrouter"
+
+    def test_successful_call_nvidia(self):
+        pool = self._make_fresh_pool("nvidia")
+        router = ProviderRouterService()
+        expected = make_result("nvidia", "meta/llama-3.3-70b-instruct")
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, \
+             patch("app.services.provider_router_service._call_openai_compatible", return_value=expected):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="pro",
+                force_provider="nvidia",
+            )
+        assert result.provider == "nvidia"
+        assert result.content == "Respuesta de prueba."
+
+    def test_successful_call_cloudflare(self):
+        pool = self._make_fresh_pool("cloudflare")
+        # Cambiar el API Key para simular el formato de cuenta
+        for key in pool._keys.values():
+            if key.provider == "cloudflare":
+                key.api_key = "myaccountid:myapitoken"
+        router = ProviderRouterService()
+        expected = make_result("cloudflare", "@cf/meta/llama-3-8b-instruct")
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, \
+             patch("app.services.provider_router_service._call_openai_compatible", return_value=expected):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="fast",
+                force_provider="cloudflare",
+            )
+        assert result.provider == "cloudflare"
+
+    def test_successful_call_huggingface(self):
+        pool = self._make_fresh_pool("huggingface")
+        router = ProviderRouterService()
+        expected = make_result("huggingface", "meta-llama/Llama-3.2-3B-Instruct")
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, \
+             patch("app.services.provider_router_service._call_huggingface", return_value=expected):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="fast",
+                force_provider="huggingface",
+            )
+        assert result.provider == "huggingface"

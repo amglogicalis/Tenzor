@@ -300,6 +300,7 @@ OPENAI_COMPATIBLE_PROVIDERS = {
     "sambanova": "https://api.sambanova.ai/v1",
     "cerebras": "https://api.cerebras.ai/v1",
     "siliconflow": "https://api.siliconflow.cn/v1",
+    "nvidia": "https://integrate.api.nvidia.com/v1"
 }
 
 def _call_cohere(
@@ -444,6 +445,80 @@ def _call_anthropic(
         tokens_out=tokens_out,
         latency_ms=round(latency, 1),
         finish_reason=data.get("stop_reason") or "stop",
+    )
+
+
+def _call_huggingface(
+    messages: List[Dict[str, str]],
+    model: str,
+    api_key: str,
+    temperature: float,
+    max_tokens: Optional[int],
+    system_prompt: Optional[str],
+) -> InferenceResult:
+    """Llama a la Inference API de Hugging Face y devuelve un InferenceResult normalizado."""
+    url = f"https://api-inference.huggingface.co/models/{model}"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    # Compilar prompt a formato estructurado de chat
+    prompt_parts = []
+    if system_prompt:
+        prompt_parts.append(f"<|system|>\n{system_prompt}\n")
+    for msg in messages:
+        role = msg["role"]
+        content = msg["content"]
+        prompt_parts.append(f"<|{role}|>\n{content}\n")
+    prompt_parts.append("<|assistant|>\n")
+    
+    prompt = "".join(prompt_parts)
+    
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "temperature": max(0.1, min(1.0, temperature)),
+            "max_new_tokens": max_tokens or 1024,
+            "return_full_text": False
+        }
+    }
+    
+    t0 = time.monotonic()
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(url, headers=headers, json=payload)
+    latency = (time.monotonic() - t0) * 1000
+    
+    if resp.status_code == 429:
+        retry_after = _parse_retry_after(resp.headers)
+        raise _RateLimitError(resp.status_code, resp.text, retry_after)
+    if resp.status_code in (401, 403):
+        raise _AuthError(resp.status_code, resp.text)
+    if resp.status_code != 200:
+        raise _ProviderError(resp.status_code, resp.text)
+        
+    data = resp.json()
+    content = ""
+    if isinstance(data, list) and len(data) > 0:
+        content = data[0].get("generated_text", "")
+    elif isinstance(data, dict):
+        content = data.get("generated_text", "")
+        
+    if "<|assistant|>" in content:
+        content = content.split("<|assistant|>")[-1].strip()
+        
+    tokens_in = len(prompt) // 4
+    tokens_out = len(content) // 4
+    
+    return InferenceResult(
+        content=content,
+        provider="huggingface",
+        model=model,
+        key_id="",
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        latency_ms=round(latency, 1),
+        finish_reason="stop",
     )
 
 
@@ -781,6 +856,24 @@ class ProviderRouterService:
             return _call_cohere(**kwargs)
         elif provider == "anthropic":
             return _call_anthropic(**kwargs)
+        elif provider == "huggingface":
+            return _call_huggingface(**kwargs)
+        elif provider == "cloudflare":
+            account_id = "default"
+            token = api_key
+            if ":" in api_key:
+                account_id, token = api_key.split(":", 1)
+            base_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"
+            return _call_openai_compatible(
+                provider=provider,
+                base_url=base_url,
+                messages=messages,
+                model=model,
+                api_key=token,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+            )
         elif provider == "openrouter":
             return _call_openrouter(**kwargs)
         elif provider in OPENAI_COMPATIBLE_PROVIDERS:

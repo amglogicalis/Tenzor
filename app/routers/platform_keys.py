@@ -44,6 +44,25 @@ ANTHROPIC_MODELS = [
     {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus", "provider": "anthropic", "free": False},
 ]
 
+NVIDIA_MODELS = [
+    {"id": "meta/llama-3.3-70b-instruct", "name": "Llama 3.3 70B Instruct (NVIDIA)", "provider": "nvidia", "free": True},
+    {"id": "nvidia/llama-3.1-nemotron-70b-instruct", "name": "Nemotron 70B Instruct (NVIDIA)", "provider": "nvidia", "free": True},
+    {"id": "meta/llama-3.1-8b-instruct", "name": "Llama 3.1 8B Instruct (NVIDIA)", "provider": "nvidia", "free": True},
+]
+
+CLOUDFLARE_MODELS = [
+    {"id": "@cf/meta/llama-3-8b-instruct", "name": "Llama 3 8B Instruct (Cloudflare)", "provider": "cloudflare", "free": True},
+    {"id": "@cf/qwen/qwen1.5-7b-chat", "name": "Qwen 1.5 7B (Cloudflare)", "provider": "cloudflare", "free": True},
+    {"id": "@cf/mistral/mistral-7b-instruct-v0.2", "name": "Mistral 7B Instruct (Cloudflare)", "provider": "cloudflare", "free": True},
+]
+
+HUGGINGFACE_MODELS = [
+    {"id": "meta-llama/Llama-3.2-3B-Instruct", "name": "Llama 3.2 3B Instruct (Hugging Face)", "provider": "huggingface", "free": True},
+    {"id": "Qwen/Qwen2.5-7B-Instruct", "name": "Qwen 2.5 7B Instruct (Hugging Face)", "provider": "huggingface", "free": True},
+    {"id": "microsoft/Phi-3-mini-4k-instruct", "name": "Phi 3 Mini 4K (Hugging Face)", "provider": "huggingface", "free": True},
+    {"id": "google/gemma-2-9b-it", "name": "Gemma 2 9B IT (Hugging Face)", "provider": "huggingface", "free": True},
+]
+
 GROQ_MODELS = [
     {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B Versatile", "provider": "groq", "free": True},
     {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 8B Instant", "provider": "groq", "free": True},
@@ -236,7 +255,8 @@ async def list_available_models(
         "sambanova": SAMBANOVA_MODELS,
         "together": TOGETHER_MODELS,
         "fireworks": FIREWORKS_MODELS,
-        "siliconflow": SILICONFLOW_MODELS
+        "siliconflow": SILICONFLOW_MODELS,
+        "nvidia": NVIDIA_MODELS
     }
 
     for provider, static_list in compatibles.items():
@@ -249,6 +269,8 @@ async def list_available_models(
                     key = getattr(config, "DEEPSEEK_API_KEY", None)
                 elif provider == "xai":
                     key = getattr(config, "XAI_API_KEY", None)
+                elif provider == "nvidia":
+                    key = getattr(config, "NVIDIA_API_KEY", None)
             
             # Buscar base URL en el router
             base_url = OPENAI_COMPATIBLE_PROVIDERS.get(provider)
@@ -259,6 +281,8 @@ async def list_available_models(
                 
             if dyn_models:
                 models.extend(dyn_models)
+            else:
+                models.extend(static_list)
     # Cohere: Listado dinámico
     if "cohere" in active_providers:
         cohere_key = user_keys_map.get("cohere")
@@ -273,6 +297,14 @@ async def list_available_models(
     # Anthropic: Listado estático
     if "anthropic" in active_providers:
         models.extend(ANTHROPIC_MODELS)
+
+    # Cloudflare: Listado estático
+    if "cloudflare" in active_providers:
+        models.extend(CLOUDFLARE_MODELS)
+
+    # Hugging Face: Listado estático
+    if "huggingface" in active_providers:
+        models.extend(HUGGINGFACE_MODELS)
 
     return models
 

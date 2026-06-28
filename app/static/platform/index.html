@@ -470,6 +470,9 @@
     .provider-siliconflow { background: rgba(50, 255, 180, 0.15); color: #32ffb4; }
     .provider-cohere { background: rgba(59, 201, 155, 0.15); color: #3bc99b; }
     .provider-anthropic { background: rgba(240, 140, 60, 0.15); color: #f08c3c; }
+    .provider-nvidia { background: rgba(118, 185, 0, 0.15); color: #76b900; }
+    .provider-cloudflare { background: rgba(243, 128, 32, 0.15); color: #f38020; }
+    .provider-huggingface { background: rgba(255, 210, 0, 0.15); color: #ffd200; }
     .model-item-free-badge {
       font-size: 9px; font-weight: 700; color: #00f59c; border: 1px solid #00f59c;
       padding: 0 4px; border-radius: 3px; margin-left: 6px; text-transform: uppercase;
@@ -847,6 +850,9 @@
                 <option value="siliconflow">SiliconFlow</option>
                 <option value="cohere">Cohere</option>
                 <option value="anthropic">Anthropic Claude</option>
+                <option value="nvidia">NVIDIA NIM</option>
+                <option value="cloudflare">Cloudflare Workers AI</option>
+                <option value="huggingface">Hugging Face</option>
               </select>
             </div>
             <div class="form-group" style="margin:0">
@@ -854,8 +860,9 @@
               <input type="text" id="key-label" placeholder="Ej: Mi Clave Personal" style="background:var(--bg-input)" />
             </div>
             <div class="form-group" style="margin:0">
-              <label class="form-label">Clave API</label>
+              <label class="form-label" id="key-api-label">Clave API</label>
               <input type="password" id="key-api-key" placeholder="AQ... o gsk_..." style="background:var(--bg-input)" />
+              <div id="cloudflare-note" style="display:none; font-size:10px; color:var(--text-3); margin-top:4px">Para Cloudflare ingresa en formato ID_DE_CUENTA:API_TOKEN</div>
             </div>
           </div>
           <div style="margin-top:16px; display:flex; justify-content:flex-end">
@@ -1819,6 +1826,19 @@ document.addEventListener('DOMContentLoaded', () => {
       searchEl.removeAttribute('readonly');
     });
   }
+  
+  // Detección dinámica de nota aclaratoria para Cloudflare
+  const providerSelect = document.getElementById('key-provider');
+  const cfNote = document.getElementById('cloudflare-note');
+  if (providerSelect && cfNote) {
+    providerSelect.addEventListener('change', () => {
+      if (providerSelect.value === 'cloudflare') {
+        cfNote.style.display = 'block';
+      } else {
+        cfNote.style.display = 'none';
+      }
+    });
+  }
 });
 
 function selectModel(modelId, provider, modelName) {
@@ -1839,6 +1859,14 @@ function selectModel(modelId, provider, modelName) {
   } else if (provider === 'cohere' && modelId.includes('plus')) {
     tier = 'pro';
   } else if (provider === 'cohere' && modelId.includes('light')) {
+    tier = 'fast';
+  } else if (provider === 'nvidia' && (modelId.includes('70b') || modelId.includes('nemotron'))) {
+    tier = 'pro';
+  } else if (provider === 'nvidia') {
+    tier = 'fast';
+  } else if (provider === 'cloudflare') {
+    tier = 'fast';
+  } else if (provider === 'huggingface') {
     tier = 'fast';
   }
   document.getElementById('ca-tier').value = tier;
