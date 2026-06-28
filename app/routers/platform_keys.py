@@ -31,6 +31,19 @@ GOOGLE_MODELS = [
     {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro", "provider": "google", "free": True},
 ]
 
+COHERE_MODELS = [
+    {"id": "command-r-plus", "name": "Command R+", "provider": "cohere", "free": False},
+    {"id": "command-r", "name": "Command R", "provider": "cohere", "free": True},
+    {"id": "command", "name": "Command", "provider": "cohere", "free": False},
+    {"id": "command-light", "name": "Command Light", "provider": "cohere", "free": True},
+]
+
+ANTHROPIC_MODELS = [
+    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "provider": "anthropic", "free": False},
+    {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku", "provider": "anthropic", "free": False},
+    {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus", "provider": "anthropic", "free": False},
+]
+
 GROQ_MODELS = [
     {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B Versatile", "provider": "groq", "free": True},
     {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 8B Instant", "provider": "groq", "free": True},
@@ -246,8 +259,20 @@ async def list_available_models(
                 
             if dyn_models:
                 models.extend(dyn_models)
-            else:
-                models.extend(static_list)
+    # Cohere: Listado dinámico
+    if "cohere" in active_providers:
+        cohere_key = user_keys_map.get("cohere")
+        cohere_models_dyn = []
+        if cohere_key:
+            cohere_models_dyn = await _fetch_cohere_models_dynamically(cohere_key)
+        if cohere_models_dyn:
+            models.extend(cohere_models_dyn)
+        else:
+            models.extend(COHERE_MODELS)
+
+    # Anthropic: Listado estático
+    if "anthropic" in active_providers:
+        models.extend(ANTHROPIC_MODELS)
 
     return models
 
@@ -461,6 +486,62 @@ async def _fetch_google_models_dynamically(api_key: str) -> List[Dict[str, Any]]
                     return models
     except Exception as e:
         logger.warning(f"No se pudieron obtener modelos dinámicos para Google: {e}")
+        
+    return []
+
+
+async def _fetch_cohere_models_dynamically(api_key: str) -> List[Dict[str, Any]]:
+    """
+    Intenta obtener dinámicamente los modelos de Cohere mediante su API oficial.
+    Si falla, hace fallback a COHERE_MODELS.
+    """
+    now = time.time()
+    key_hash = api_key[-8:] if len(api_key) > 8 else "key"
+    cache_key = f"cohere_{key_hash}"
+    
+    if cache_key in _providers_models_cache:
+        cached = _providers_models_cache[cache_key]
+        if now - cached["last_updated"] < 300: # 5 minutos
+            return cached["data"]
+            
+    try:
+        url = "https://api.cohere.com/v1/models"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=3.5) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json().get("models", [])
+                models = []
+                for m in data:
+                    model_id = m.get("name")
+                    if not model_id:
+                        continue
+                    
+                    endpoints = m.get("endpoints", [])
+                    if "chat" not in endpoints and "generate" not in endpoints:
+                        continue
+                        
+                    model_name = m.get("display_name") or model_id
+                    is_free = "light" in model_id.lower() or "command-r" in model_id.lower()
+                    models.append({
+                        "id": model_id,
+                        "name": f"{model_name} (COHERE)",
+                        "provider": "cohere",
+                        "free": is_free
+                    })
+                
+                if models:
+                    _providers_models_cache[cache_key] = {
+                        "data": models,
+                        "last_updated": now
+                    }
+                    logger.info(f"Detección dinámica: {len(models)} modelos recuperados de Cohere")
+                    return models
+    except Exception as e:
+        logger.warning(f"No se pudieron obtener modelos dinámicos para Cohere: {e}")
         
     return []
 

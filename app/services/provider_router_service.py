@@ -302,6 +302,151 @@ OPENAI_COMPATIBLE_PROVIDERS = {
     "siliconflow": "https://api.siliconflow.cn/v1",
 }
 
+def _call_cohere(
+    messages: List[Dict[str, str]],
+    model: str,
+    api_key: str,
+    temperature: float,
+    max_tokens: Optional[int],
+    system_prompt: Optional[str],
+) -> InferenceResult:
+    """Llama a Cohere v1 Chat API y devuelve un InferenceResult normalizado."""
+    url = "https://api.cohere.com/v1/chat"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    chat_history = []
+    user_message = ""
+    
+    # Procesar historial para Cohere
+    for msg in messages[:-1]:
+        role = "USER" if msg["role"] == "user" else "CHATBOT"
+        chat_history.append({"role": role, "message": msg["content"]})
+        
+    if messages:
+        user_message = messages[-1]["content"]
+        
+    payload = {
+        "message": user_message,
+        "chat_history": chat_history,
+        "model": model,
+        "temperature": temperature
+    }
+    if system_prompt:
+        payload["preamble"] = system_prompt
+    if max_tokens:
+        payload["max_tokens"] = max_tokens
+        
+    t0 = time.monotonic()
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(url, headers=headers, json=payload)
+        
+    latency = (time.monotonic() - t0) * 1000
+    
+    if resp.status_code == 429:
+        retry_after = _parse_retry_after(resp.headers)
+        raise _RateLimitError(resp.status_code, resp.text, retry_after)
+    if resp.status_code in (401, 403):
+        raise _AuthError(resp.status_code, resp.text)
+    if resp.status_code != 200:
+        raise _ProviderError(resp.status_code, resp.text)
+        
+    data = resp.json()
+    content = data.get("text", "")
+    meta = data.get("meta", {}).get("billed_tokens", {})
+    tokens_in = meta.get("input_tokens", 0) or 0
+    tokens_out = meta.get("output_tokens", 0) or 0
+    
+    return InferenceResult(
+        content=content,
+        provider="cohere",
+        model=model,
+        key_id="",
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        latency_ms=round(latency, 1),
+        finish_reason="stop",
+    )
+
+
+def _call_anthropic(
+    messages: List[Dict[str, str]],
+    model: str,
+    api_key: str,
+    temperature: float,
+    max_tokens: Optional[int],
+    system_prompt: Optional[str],
+) -> InferenceResult:
+    """Llama a la API de Messages de Anthropic Claude y devuelve un InferenceResult normalizado."""
+    url = "https://api.anthropic.com/v1/messages"
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+    }
+    
+    # Conversión al formato estricto de mensajes de Anthropic (sólo user/assistant alternados)
+    anthropic_messages = []
+    last_role = None
+    for msg in messages:
+        role = "user" if msg["role"] == "user" else "assistant"
+        if role == last_role:
+            if anthropic_messages:
+                anthropic_messages[-1]["content"] += "\n\n" + msg["content"]
+            continue
+        anthropic_messages.append({"role": role, "content": msg["content"]})
+        last_role = role
+        
+    if anthropic_messages and anthropic_messages[0]["role"] != "user":
+        anthropic_messages.insert(0, {"role": "user", "content": "Hola"})
+        
+    payload = {
+        "model": model,
+        "messages": anthropic_messages,
+        "max_tokens": max_tokens or 2048,
+        "temperature": temperature
+    }
+    if system_prompt:
+        payload["system"] = system_prompt
+        
+    t0 = time.monotonic()
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(url, headers=headers, json=payload)
+        
+    latency = (time.monotonic() - t0) * 1000
+    
+    if resp.status_code == 429:
+        retry_after = _parse_retry_after(resp.headers)
+        raise _RateLimitError(resp.status_code, resp.text, retry_after)
+    if resp.status_code in (401, 403):
+        raise _AuthError(resp.status_code, resp.text)
+    if resp.status_code != 200:
+        raise _ProviderError(resp.status_code, resp.text)
+        
+    data = resp.json()
+    
+    content = ""
+    if data.get("content") and len(data["content"]) > 0:
+        content = data["content"][0].get("text", "")
+        
+    usage = data.get("usage", {})
+    tokens_in = usage.get("input_tokens", 0) or 0
+    tokens_out = usage.get("output_tokens", 0) or 0
+    
+    return InferenceResult(
+        content=content,
+        provider="anthropic",
+        model=model,
+        key_id="",
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        latency_ms=round(latency, 1),
+        finish_reason=data.get("stop_reason") or "stop",
+    )
+
+
 def _call_openai_compatible(
     provider: str,
     base_url: str,
@@ -632,6 +777,10 @@ class ProviderRouterService:
             return _call_groq(**kwargs)
         elif provider == "google":
             return _call_gemini(**kwargs)
+        elif provider == "cohere":
+            return _call_cohere(**kwargs)
+        elif provider == "anthropic":
+            return _call_anthropic(**kwargs)
         elif provider == "openrouter":
             return _call_openrouter(**kwargs)
         elif provider in OPENAI_COMPATIBLE_PROVIDERS:

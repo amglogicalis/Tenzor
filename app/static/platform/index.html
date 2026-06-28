@@ -468,6 +468,8 @@
     .provider-sambanova { background: rgba(255, 215, 0, 0.15); color: #ffd700; }
     .provider-cerebras { background: rgba(0, 200, 255, 0.15); color: #00c8ff; }
     .provider-siliconflow { background: rgba(50, 255, 180, 0.15); color: #32ffb4; }
+    .provider-cohere { background: rgba(59, 201, 155, 0.15); color: #3bc99b; }
+    .provider-anthropic { background: rgba(240, 140, 60, 0.15); color: #f08c3c; }
     .model-item-free-badge {
       font-size: 9px; font-weight: 700; color: #00f59c; border: 1px solid #00f59c;
       padding: 0 4px; border-radius: 3px; margin-left: 6px; text-transform: uppercase;
@@ -843,6 +845,8 @@
                 <option value="cerebras">Cerebras</option>
                 <option value="sambanova">SambaNova</option>
                 <option value="siliconflow">SiliconFlow</option>
+                <option value="cohere">Cohere</option>
+                <option value="anthropic">Anthropic Claude</option>
               </select>
             </div>
             <div class="form-group" style="margin:0">
@@ -1828,6 +1832,14 @@ function selectModel(modelId, provider, modelName) {
     tier = 'fast';
   } else if (provider === 'google' && (modelId.includes('pro') || modelId.includes('2.5'))) {
     tier = 'pro';
+  } else if (provider === 'anthropic' && (modelId.includes('sonnet') || modelId.includes('opus'))) {
+    tier = 'pro';
+  } else if (provider === 'anthropic' && modelId.includes('haiku')) {
+    tier = 'fast';
+  } else if (provider === 'cohere' && modelId.includes('plus')) {
+    tier = 'pro';
+  } else if (provider === 'cohere' && modelId.includes('light')) {
+    tier = 'fast';
   }
   document.getElementById('ca-tier').value = tier;
   
