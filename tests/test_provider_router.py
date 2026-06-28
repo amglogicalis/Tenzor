@@ -612,3 +612,44 @@ class TestProviderRouter:
         assert result.content == "ok-lightweight"
         assert "gemini-2.5-flash" in called_models
         assert "gemini-2.0-flash-lite" in called_models
+
+    def test_custom_agent_fallback_models(self):
+        """Si el principal y su liviano fallan, debe recurrir a los fallback_models personalizados del agente."""
+        pool = self._make_fresh_pool("google")
+        
+        # Agregar una clave de groq al pool
+        from app.services.provider_key_pool_service import ProviderKey
+        pool._register_key(ProviderKey(
+            key_id="key-groq-test", provider="groq", api_key="gsk_test",
+            tier="all", priority=10, source="user", user_id="user_123"
+        ))
+        
+        router = ProviderRouterService()
+        called_configs = []
+        
+        def mock_dispatch(provider, model, messages, api_key, system_prompt, temperature, max_tokens):
+            called_configs.append((provider, model))
+            if provider == "google":
+                raise _RateLimitError(429, "rate limit", retry_after=5)
+            return InferenceResult(
+                content="ok-custom-fallback", provider=provider, model=model,
+                key_id="", tokens_in=10, tokens_out=20, latency_ms=100,
+                finish_reason="stop"
+            )
+
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, patch.object(router, "_dispatch", side_effect=mock_dispatch):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="pro",
+                user_id="user_123",
+                preferred_provider="google",
+                preferred_model="gemini-2.5-flash",
+                fallback_models=[{"provider": "groq", "model": "llama-3.1-8b-instant"}]
+            )
+            
+        assert result.provider == "groq"
+        assert result.content == "ok-custom-fallback"
+        assert ("google", "gemini-2.5-flash") in called_configs
+        assert ("google", "gemini-2.0-flash-lite") in called_configs
+        assert ("groq", "llama-3.1-8b-instant") in called_configs

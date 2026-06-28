@@ -749,6 +749,7 @@ class ProviderRouterService:
         force_provider: Optional[str] = None,  # override para debug
         preferred_provider: Optional[str] = None,
         preferred_model: Optional[str] = None,
+        fallback_models: Optional[List[Dict[str, str]]] = None,
     ) -> InferenceResult:
         """
         Punto de entrada principal.
@@ -777,13 +778,44 @@ class ProviderRouterService:
                 if k.user_id == user_id or k.source == "system":
                     active_providers_in_pool.add(k.provider)
 
-        # Determinar orden de proveedores priorizando el preferido
+        # Construir secuencia de intentos (provider, model)
+        attempts_sequence = []
+        visited_configs = set()
+
+        # - Añadir el principal si existe
+        if preferred_provider and preferred_model:
+            config_key = (preferred_provider, preferred_model)
+            attempts_sequence.append(config_key)
+            visited_configs.add(config_key)
+            
+            # Su fallback local liviano
+            lw = LIGHTWEIGHT_MODELS.get(preferred_provider)
+            if lw and (preferred_provider, lw) not in visited_configs:
+                attempts_sequence.append((preferred_provider, lw))
+                visited_configs.add((preferred_provider, lw))
+
+        # - Añadir los fallback_models personalizados del agente
+        if fallback_models:
+            for fm in fallback_models:
+                p = fm.get("provider")
+                m = fm.get("model")
+                if p and m and p in active_providers_in_pool:
+                    config_key = (p, m)
+                    if config_key not in visited_configs:
+                        attempts_sequence.append(config_key)
+                        visited_configs.add(config_key)
+                        
+                        # También añadir su respectivo modelo liviano como fallback del fallback
+                        lw = LIGHTWEIGHT_MODELS.get(p)
+                        if lw and (p, lw) not in visited_configs:
+                            attempts_sequence.append((p, lw))
+                            visited_configs.add((p, lw))
+
+        # - Añadir el resto de proveedores activos del pool (fallbacks generales del sistema)
         if force_provider:
             provider_order = [force_provider]
         elif preferred_provider:
-            # Poner el preferido primero
             provider_order = [preferred_provider]
-            # Determinar orden de fallback del resto de los activos del pool
             default_fallbacks = ["groq", "google", "openrouter"]
             for p in default_fallbacks:
                 if p != preferred_provider and p in active_providers_in_pool:
@@ -792,7 +824,6 @@ class ProviderRouterService:
                 if p not in provider_order:
                     provider_order.append(p)
         else:
-            # Obtener el orden sugerido por el tier
             suggested_order = key_pool.get_ordered_providers(tier)
             provider_order = []
             for p in suggested_order:
@@ -801,6 +832,22 @@ class ProviderRouterService:
             for p in sorted(active_providers_in_pool):
                 if p not in provider_order:
                     provider_order.append(p)
+
+        for p in provider_order:
+            m = key_pool.get_model_for_tier(p, tier)
+            if not m:
+                m = LIGHTWEIGHT_MODELS.get(p)
+            if p and m:
+                config_key = (p, m)
+                if config_key not in visited_configs:
+                    attempts_sequence.append(config_key)
+                    visited_configs.add(config_key)
+                    
+                    # Su fallback local
+                    lw = LIGHTWEIGHT_MODELS.get(p)
+                    if lw and (p, lw) not in visited_configs:
+                        attempts_sequence.append((p, lw))
+                        visited_configs.add((p, lw))
 
         attempts: List[ProviderAttempt] = []
 
@@ -813,59 +860,39 @@ class ProviderRouterService:
             "deepseek/deepseek-r1-distill-llama-70b:free"
         ]
 
-        for provider in provider_order:
-            # Obtener el modelo base a intentar
-            if provider == preferred_provider and preferred_model:
-                base_model = preferred_model
-            else:
-                base_model = key_pool.get_model_for_tier(provider, tier)
-
-            if not base_model:
-                # Si no hay modelo configurado para el tier, intentar con el modelo liviano por defecto
-                base_model = LIGHTWEIGHT_MODELS.get(provider)
-                if not base_model:
-                    logger.warning(f"Router: no hay modelo configurado para {provider}/{tier}")
-                    continue
-
-            # Generamos la lista de modelos a intentar para este proveedor
-            models_to_try = [base_model]
-            
-            # Fallback local (Intra-Provider): Si el principal es diferente del liviano,
-            # lo agregamos a la cola para reintentar localmente antes de cambiar de proveedor.
-            lw_model = LIGHTWEIGHT_MODELS.get(provider)
-            if lw_model and lw_model != base_model:
-                models_to_try.append(lw_model)
-
-            # Si es OpenRouter y es un modelo gratuito, agregamos también los fallbacks gratuitos
-            if provider == "openrouter" and base_model.endswith(":free"):
+        for provider, model in attempts_sequence:
+            # Si es OpenRouter y es un modelo gratuito, expandimos dinámicamente sus fallbacks gratuitos
+            models_to_try = [model]
+            if provider == "openrouter" and model.endswith(":free"):
                 for fallback_m in openrouter_free_fallbacks:
                     if fallback_m not in models_to_try:
                         models_to_try.append(fallback_m)
 
             rpm_limit = PROVIDER_RPM_LIMITS.get(provider, 20)
 
-            for model in models_to_try:
+            for try_model in models_to_try:
                 # Intentar con hasta 2 keys del mismo provider (si hay varias)
                 key_attempts_succeeded = False
                 for _ in range(2):
                     key = key_pool.get_best_key(
                         provider=provider, tier=tier, user_id=user_id
                     )
-                    if key is None and model != base_model:
+                    # Si no es la primera opción, permitimos ignore_cooldown para resiliencia
+                    if key is None and (provider, try_model) != attempts_sequence[0]:
                         key = key_pool.get_best_key(
                             provider=provider, tier=tier, user_id=user_id, ignore_cooldown=True
                         )
                     if key is None:
-                        logger.info(f"Router: no hay keys disponibles en {provider} para el modelo {model}, pasando a la siguiente opción")
+                        logger.info(f"Router: no hay keys disponibles en {provider} para el modelo {try_model}, pasando a la siguiente opción")
                         break
 
                     cooldown_service.record_request(key.key_id)
-                    logger.info(f"Router: intentando {provider}/{model} con key={key.key_id}")
+                    logger.info(f"Router: intentando {provider}/{try_model} con key={key.key_id}")
 
                     try:
                         result = self._dispatch(
                             provider=provider,
-                            model=model,
+                            model=try_model,
                             messages=messages,
                             api_key=key.api_key,
                             system_prompt=system_prompt,
@@ -880,7 +907,7 @@ class ProviderRouterService:
                             tokens_out=result.tokens_out,
                         )
                         logger.info(
-                            f"Router: ✅ {provider}/{model} | {result.tokens_in}in "
+                            f"Router: ✅ {provider}/{try_model} | {result.tokens_in}in "
                             f"{result.tokens_out}out | {result.latency_ms:.0f}ms"
                         )
                         return result
@@ -888,15 +915,15 @@ class ProviderRouterService:
                     except _RateLimitError as e:
                         cooldown_service.record_429(key.key_id, retry_after=e.retry_after)
                         attempts.append(ProviderAttempt(
-                            provider=provider, key_id=key.key_id, model=model,
+                            provider=provider, key_id=key.key_id, model=try_model,
                             error_code=429, error_msg=str(e)[:200], retry_after=e.retry_after,
                         ))
-                        logger.warning(f"Router: 429 en {provider}/{key.key_id} para modelo {model} retry_after={e.retry_after}s")
+                        logger.warning(f"Router: 429 en {provider}/{key.key_id} para modelo {try_model} retry_after={e.retry_after}s")
 
                     except _AuthError as e:
                         cooldown_service.record_auth_error(key.key_id)
                         attempts.append(ProviderAttempt(
-                            provider=provider, key_id=key.key_id, model=model,
+                            provider=provider, key_id=key.key_id, model=try_model,
                             error_code=e.code, error_msg=str(e)[:200],
                         ))
                         logger.error(f"Router: auth error en {provider}/{key.key_id}")
@@ -905,7 +932,7 @@ class ProviderRouterService:
                     except _ServiceError as e:
                         cooldown_service.record_503(key.key_id)
                         attempts.append(ProviderAttempt(
-                            provider=provider, key_id=key.key_id, model=model,
+                            provider=provider, key_id=key.key_id, model=try_model,
                             error_code=503, error_msg=str(e)[:200],
                         ))
                         logger.warning(f"Router: 503 en {provider}/{key.key_id}")

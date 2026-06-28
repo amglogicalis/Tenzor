@@ -1218,6 +1218,8 @@ function openCreateAgent() {
   document.getElementById('ca-model-search').value = 'Gemini 2.0 Flash (google)';
   document.getElementById('ca-tier').value = 'balanced';
   
+  window.currentAgentFallbackModels = null;
+  
   openModal('modal-create-agent');
   loadAvailableModels();
 }
@@ -1237,6 +1239,7 @@ async function createAgent() {
       is_public: document.getElementById('ca-public').checked,
       preferred_provider: document.getElementById('ca-provider').value,
       preferred_model: document.getElementById('ca-model-id').value,
+      fallback_models: window.currentAgentFallbackModels || null
     });
     closeModal('modal-create-agent');
     toast('Agente creado y compilado correctamente ✅', 'success');
@@ -1963,8 +1966,16 @@ async function recommendModelForAgent() {
     // Función global temporal para aplicar la recomendación
     window.applyRecommendation = (modelId, provider, modelName) => {
       selectModel(modelId, provider, modelName);
+      
+      // Guardar los otros dos modelos recomendados como fallbacks dedicados
+      const otherModels = recommendations.filter(r => r.model !== modelId);
+      window.currentAgentFallbackModels = otherModels.map(r => ({
+        provider: r.provider,
+        model: r.model
+      }));
+      
       document.getElementById('temp-recommendation-modal').remove();
-      toast(`Modelo ${modelName} pre-configurado con éxito`, 'success');
+      toast(`Modelo ${modelName} pre-configurado con éxito con fallbacks dedicados ✨`, 'success');
     };
     
   } catch (e) {

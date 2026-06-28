@@ -4,9 +4,9 @@ Hecho -- 2.AL elegir configurar una api key de un provider, al elegir entre prov
 
 Hecho -- 3.Añadir poco a poco todos los providers de la opcion/capa B
 
-4.Explicamiento y revision del fallback, y si es posible mejorarlo
+Hecho -- 4.Explicamiento y revision del fallback, y si es posible mejorarlo
 
-5.Revisar no deja borrar documentos de los conocimientos de un agente 
+5.Revisar que no deja borrar documentos de los conocimientos de un agente 
 
 6.Hacer que pueda haber rondas ilimitadas
 

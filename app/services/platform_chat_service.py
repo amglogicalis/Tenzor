@@ -152,6 +152,7 @@ class PlatformChatService:
         # Cargar preferencias de proveedor y modelo del perfil del agente
         preferred_provider = retrieval_profile.get("preferred_provider", None) if retrieval_profile else None
         preferred_model = retrieval_profile.get("preferred_model", None) if retrieval_profile else None
+        fallback_models = retrieval_profile.get("fallback_models", None) if retrieval_profile else None
 
         # Cargar claves de usuario descifradas en memoria al iniciar la petición
         from app.services.provider_keys_db_service import provider_keys_db_service
@@ -244,6 +245,7 @@ class PlatformChatService:
                     force_provider=force_provider,
                     preferred_provider=preferred_provider,
                     preferred_model=preferred_model,
+                    fallback_models=fallback_models,
                 )
             finally:
                 key_pool.remove_user_keys(user_id)

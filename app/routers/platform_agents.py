@@ -78,6 +78,7 @@ async def create_agent(
             is_public=body.is_public,
             preferred_provider=body.preferred_provider,
             preferred_model=body.preferred_model,
+            fallback_models=body.fallback_models,
         )
         return agent
     except ValueError as e:

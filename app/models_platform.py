@@ -3,7 +3,7 @@ platform_models.py
 Modelos Pydantic para la plataforma Arzor AIs Platform.
 """
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
 
@@ -61,6 +61,7 @@ class CreateAgentRequest(BaseModel):
     is_public: bool = False
     preferred_provider: Optional[str] = Field(None, pattern=r"^(google|groq|openrouter|deepseek|xai|perplexity|mistral|together|fireworks|cerebras|sambanova|siliconflow|cohere|anthropic|nvidia|cloudflare|huggingface|zai|novita|scaleway|watsonx)$")
     preferred_model: Optional[str] = Field(None, max_length=100)
+    fallback_models: Optional[List[Dict[str, str]]] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -71,6 +72,7 @@ class UpdateAgentRequest(BaseModel):
     is_public: Optional[bool] = None
     preferred_provider: Optional[str] = Field(None, pattern=r"^(google|groq|openrouter|deepseek|xai|perplexity|mistral|together|fireworks|cerebras|sambanova|siliconflow|cohere|anthropic|nvidia|cloudflare|huggingface|zai|novita|scaleway|watsonx)$")
     preferred_model: Optional[str] = Field(None, max_length=100)
+    fallback_models: Optional[List[Dict[str, str]]] = None
 
 
 class AgentVersionResponse(BaseModel):
