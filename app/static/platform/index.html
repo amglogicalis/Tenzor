@@ -379,12 +379,12 @@
 
     /* ── Modal ───────────────────────────────────────────────────────────── */
     .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(4px); z-index: 200;
-      display: flex; align-items: center; justify-content: center; padding: 20px;
+      position: fixed !important; inset: 0 !important; background: rgba(0,0,0,0.7) !important;
+      backdrop-filter: blur(4px) !important; z-index: 9999 !important;
+      display: flex !important; align-items: center !important; justify-content: center !important; padding: 20px !important;
       opacity: 0; pointer-events: none; transition: opacity var(--transition);
     }
-    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal-overlay.open { opacity: 1 !important; pointer-events: all !important; }
     .modal {
       background: var(--bg-surface); border: 1px solid var(--border);
       border-radius: var(--radius-xl); padding: 32px;
@@ -503,7 +503,7 @@
     }
     
     /* Asegurar jerarquía visual sobre las partículas */
-    #app, #auth-screen {
+    .app-container, #auth-screen, .modal-overlay {
       position: relative; z-index: 1;
     }
     
