@@ -851,6 +851,10 @@ class ProviderRouterService:
                     key = key_pool.get_best_key(
                         provider=provider, tier=tier, user_id=user_id
                     )
+                    if key is None and model != base_model:
+                        key = key_pool.get_best_key(
+                            provider=provider, tier=tier, user_id=user_id, ignore_cooldown=True
+                        )
                     if key is None:
                         logger.info(f"Router: no hay keys disponibles en {provider} para el modelo {model}, pasando a la siguiente opción")
                         break

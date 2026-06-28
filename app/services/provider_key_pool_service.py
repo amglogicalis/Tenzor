@@ -239,6 +239,7 @@ class ProviderKeyPoolService:
         provider: str,
         tier: str = "balanced",
         user_id: Optional[str] = None,
+        ignore_cooldown: bool = False,
     ) -> Optional[ProviderKey]:
         """
         Selecciona la mejor key disponible para el provider y tier dados.
@@ -247,7 +248,7 @@ class ProviderKeyPoolService:
           1. Keys del usuario (si user_id proporcionado) para ese provider
           2. Keys de sistema compatibles con el tier
 
-        Devuelve None si todas las keys están en cooldown.
+        Devuelve None si todas las keys están en cooldown y no se indica ignore_cooldown.
         """
         rpm_limit = PROVIDER_RPM_LIMITS.get(provider, 20)
         candidates: List[Tuple[ProviderKey, int]] = []
@@ -259,7 +260,7 @@ class ProviderKeyPoolService:
                 if key.tier not in (tier, "all"):
                     continue
                 # Preferir keys del usuario si se proporciona user_id
-                if not cooldown_service.is_available(key.key_id, rpm_limit=rpm_limit):
+                if not ignore_cooldown and not cooldown_service.is_available(key.key_id, rpm_limit=rpm_limit):
                     continue
                 # Score: [prioridad de usuario, prioridad de key]
                 user_score = 0 if (user_id and key.user_id == user_id) else 1
