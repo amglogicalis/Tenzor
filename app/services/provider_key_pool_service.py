@@ -54,13 +54,83 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
     },
     "google": {
         "fast":     "gemini-2.0-flash-lite",
-        "balanced": "gemini-2.0-flash",          # Flash es más rápido y generoso que 2.5-flash
-        "pro":      "gemini-2.5-flash",           # 2.5-flash para pro (buen balance calidad/coste)
+        "balanced": "gemini-2.0-flash",
+        "pro":      "gemini-2.5-flash",
     },
     "openrouter": {
         "fast":     "meta-llama/llama-3.1-8b-instruct:free",
         "balanced": "meta-llama/llama-3.3-70b-instruct:free",
         "pro":      "anthropic/claude-3.5-sonnet",
+    },
+    "cohere": {
+        "fast":     "command-light",
+        "balanced": "command-r",
+        "pro":      "command-r-plus",
+    },
+    "anthropic": {
+        "fast":     "claude-3-5-haiku-20241022",
+        "balanced": "claude-3-5-sonnet-20241022",
+        "pro":      "claude-3-5-sonnet-20241022",
+    },
+    "nvidia": {
+        "fast":     "meta/llama-3.1-8b-instruct",
+        "balanced": "nvidia/llama-3.1-nemotron-70b-instruct",
+        "pro":      "nvidia/llama-3.1-nemotron-70b-instruct",
+    },
+    "cloudflare": {
+        "fast":     "@cf/meta/llama-3-8b-instruct",
+        "balanced": "@cf/meta/llama-3-8b-instruct",
+        "pro":      "@cf/mistral/mistral-7b-instruct-v0.2",
+    },
+    "huggingface": {
+        "fast":     "microsoft/Phi-3-mini-4k-instruct",
+        "balanced": "meta-llama/Llama-3.2-3B-Instruct",
+        "pro":      "Qwen/Qwen2.5-7B-Instruct",
+    },
+    "deepseek": {
+        "fast":     "deepseek-chat",
+        "balanced": "deepseek-chat",
+        "pro":      "deepseek-reasoner",
+    },
+    "xai": {
+        "fast":     "grok-2",
+        "balanced": "grok-2",
+        "pro":      "grok-2",
+    },
+    "perplexity": {
+        "fast":     "sonar-reasoning",
+        "balanced": "sonar",
+        "pro":      "sonar",
+    },
+    "mistral": {
+        "fast":     "mistral-small-latest",
+        "balanced": "mistral-large-latest",
+        "pro":      "mistral-large-latest",
+    },
+    "together": {
+        "fast":     "meta-llama/Llama-3-8b-chat-hf",
+        "balanced": "meta-llama/Llama-3-70b-chat-hf",
+        "pro":      "meta-llama/Llama-3-70b-chat-hf",
+    },
+    "fireworks": {
+        "fast":     "accounts/fireworks/models/llama-v3-8b-instruct",
+        "balanced": "accounts/fireworks/models/llama-v3-70b-instruct",
+        "pro":      "accounts/fireworks/models/llama-v3-70b-instruct",
+    },
+    "cerebras": {
+        "fast":     "llama3-8b-8192",
+        "balanced": "llama3-70b-8192",
+        "pro":      "llama3-70b-8192",
+    },
+    "sambanova": {
+        "fast":     "Meta-Llama-3.1-8B-Instruct",
+        "balanced": "Meta-Llama-3.1-70B-Instruct",
+        "pro":      "Meta-Llama-3.1-70B-Instruct",
+    },
+    "siliconflow": {
+        "fast":     "deepseek-ai/DeepSeek-V3",
+        "balanced": "deepseek-ai/DeepSeek-V3",
+        "pro":      "deepseek-ai/DeepSeek-R1",
     },
 }
 
