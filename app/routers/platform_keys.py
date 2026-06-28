@@ -337,8 +337,6 @@ async def list_available_models(
     if "watsonx" in active_providers:
         models.extend(WATSONX_MODELS)
 
-    return models
-
 @router.post("/recommend", response_model=List[RecommendationItem], summary="Asistente de recomendación de modelos")
 async def recommend_models(
     req: RecommendRequest,
@@ -346,40 +344,109 @@ async def recommend_models(
 ):
     """
     Analiza la especialización propuesta y los modelos disponibles del usuario
-    para recomendar los 3 mejores modelos.
+    para recomendar los 3 mejores modelos (Capacidad, Rentabilidad y Equilibrio).
     """
-    if not config.GEMINI_API_KEY:
-        # Fallback a recomendación fija si no hay Gemini configurado
-        return [
-            {"provider": "groq", "model": "llama-3.3-70b-versatile", "reason": "Llama 3.3 es ideal para razonamiento rápido y formateo de datos."},
-            {"provider": "google", "model": "gemini-2.0-flash", "reason": "Gemini 2.0 Flash es excelente para tareas multimodales y contextos extensos."},
-            {"provider": "openrouter", "model": "meta-llama/llama-3.3-70b-instruct:free", "reason": "La versión gratuita de Llama 3.3 en OpenRouter es muy balanceada para desarrollo general."}
-        ]
-
-    # Obtener modelos disponibles del usuario
+    # 1. Obtener modelos disponibles del usuario
     available = await list_available_models(current_user=current_user)
     if not available:
-        raise HTTPException(status_code=400, detail="No tienes proveedores activos configurados.")
+        # Fallback si no tiene claves de perfil
+        return [
+            {"provider": "groq", "model": "llama-3.3-70b-versatile", "reason": "Capacidad (groq): Llama 3.3 es el modelo recomendado por su gran capacidad de razonamiento."},
+            {"provider": "google", "model": "gemini-2.0-flash", "reason": "Equilibrio (google): Gemini 2.0 Flash ofrece un gran equilibrio entre velocidad y calidad."},
+            {"provider": "openrouter", "model": "meta-llama/llama-3.1-8b-instruct:free", "reason": "Rentabilidad (openrouter): La versión gratuita de Llama 3.1 en OpenRouter es muy rentable."}
+        ]
 
-    models_desc = "\n".join([f"- Proveedor: {m['provider']} | ID de Modelo: {m['id']} | Nombre: {m['name']}" for m in available])
+    # Preparamos el fallback inteligente por código (en caso de que falle la inferencia o no haya claves)
+    active_providers = {m["provider"] for m in available}
+    code_recommendations = []
+    
+    # - Buscar capaz
+    capable_model = None
+    for p in ["google", "groq", "anthropic", "nvidia", "deepseek", "cohere"]:
+        if p in active_providers:
+            for m in available:
+                if m["provider"] == p and ("pro" in m["id"].lower() or "70b" in m["id"].lower() or "sonnet" in m["id"].lower() or "plus" in m["id"].lower() or "opus" in m["id"].lower()):
+                    capable_model = m
+                    break
+            if capable_model:
+                break
+    if not capable_model and available:
+        capable_model = available[0]
+        
+    if capable_model:
+        code_recommendations.append(RecommendationItem(
+            provider=capable_model["provider"],
+            model=capable_model["id"],
+            reason=f"Capacidad: {capable_model['name']} destaca en razonamiento estructurado para esta especialidad."
+        ))
+        
+    # - Buscar rentable
+    rentable_model = None
+    for p in ["groq", "cloudflare", "huggingface", "google", "cohere", "zai"]:
+        if p in active_providers:
+            for m in available:
+                if m["provider"] == p and ("lite" in m["id"].lower() or "8b" in m["id"].lower() or "light" in m["id"].lower() or "flash" in m["id"].lower() or "free" in m["id"].lower() or "mini" in m["id"].lower()):
+                    if m["id"] != (capable_model["id"] if capable_model else None):
+                        rentable_model = m
+                        break
+            if rentable_model:
+                break
+    if not rentable_model:
+        for m in available:
+            if m["id"] != (capable_model["id"] if capable_model else None):
+                rentable_model = m
+                break
+    if not rentable_model and available:
+        rentable_model = available[0]
+        
+    if rentable_model:
+        code_recommendations.append(RecommendationItem(
+            provider=rentable_model["provider"],
+            model=rentable_model["id"],
+            reason=f"Rentabilidad: {rentable_model['name']} es altamente rápido, rentable y con gran disponibilidad de tokens."
+        ))
+        
+    # - Buscar equilibrado
+    balanced_model = None
+    for m in available:
+        m_id = m["id"]
+        if m_id != (capable_model["id"] if capable_model else None) and m_id != (rentable_model["id"] if rentable_model else None):
+            balanced_model = m
+            break
+    if not balanced_model and available:
+        balanced_model = available[0]
+        
+    if balanced_model:
+        code_recommendations.append(RecommendationItem(
+            provider=balanced_model["provider"],
+            model=balanced_model["id"],
+            reason=f"Equilibrio: {balanced_model['name']} es el modelo ideal para balancear latencia y calidad conversacional."
+        ))
 
+    # Intentar obtener recomendación del LLM mediante el router
+    from app.services.provider_router_service import provider_router
+    models_desc = "\n".join([f"- Proveedor: {m['provider']} | ID: {m['id']} | Nombre: {m['name']}" for m in available])
+    
     prompt = f"""
-Como experto arquitecto de IA de la plataforma Arzor, analiza la siguiente especialización/tarea de un agente de IA:
+Como experto arquitecto de IA de la plataforma Arzor, analiza la siguiente especialización de un agente de IA:
 "{req.specialization}"
 
 Aquí tienes la lista de modelos de lenguaje disponibles que el usuario tiene activos actualmente (según sus API keys):
 {models_desc}
 
-Elige exactamente los 3 mejores modelos de la lista anterior que mejor se adapten a esta especialización.
-Debe ser una selección variada (o repetidos si es el mejor de distintos proveedores) que optimice calidad, velocidad o coste.
-Explica en una sola frase breve y técnica por qué recomiendas cada modelo específico para esta especialidad.
+Elige exactamente los 3 mejores modelos de la lista anterior que mejor se adapten a esta especialización, asegurándote de que:
+1. El primero sea el más CAPAZ (calidad premium de razonamiento/análisis).
+2. El segundo sea el más RENTABLE (alta disponibilidad, velocidad y bajo consumo de tokens).
+3. El tercero sea el más EQUILIBRADO (mejor balance global latencia/precisión).
+
+Explica en una sola frase breve en español por qué recomiendas cada modelo específico destacando si es Capacidad, Rentabilidad o Equilibrio.
 
 RESPONDE ESTRICTAMENTE en formato JSON con la siguiente estructura (un array con exactamente 3 objetos):
 [
   {{
     "provider": "<proveedor del modelo recomendado>",
     "model": "<id de modelo recomendado>",
-    "reason": "<breve explicación de una frase en español de por qué es óptimo para esta tarea>"
+    "reason": "<explicación de una frase en español de por qué es óptimo para esta tarea>"
   }},
   ...
 ]
@@ -387,11 +454,30 @@ No añadas texto adicional antes ni después del JSON.
 """
 
     try:
-        genai.configure(api_key=config.GEMINI_API_KEY, transport="rest")
-        # Usamos gemini-1.5-flash que es rápido y altamente disponible
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        # Cargar temporalmente las claves descifradas del usuario en memoria para la inferencia
+        from app.services.provider_keys_db_service import provider_keys_db_service
+        from app.services.provider_key_pool_service import key_pool
+        decrypted_keys = provider_keys_db_service.get_decrypted_user_keys(current_user["user_id"])
+        for uk in decrypted_keys:
+            key_pool.add_user_key(
+                key_id=uk["key_id"],
+                provider=uk["provider"],
+                api_key=uk["api_key"],
+                user_id=current_user["user_id"],
+                label=uk["key_label"],
+                priority=10
+            )
+            
+        try:
+            result = provider_router.infer(
+                messages=[{"role": "user", "content": prompt}],
+                tier="balanced",
+                user_id=current_user["user_id"]
+            )
+        finally:
+            key_pool.remove_user_keys(current_user["user_id"])
+            
+        text = result.content.strip()
         
         # Extraer JSON de forma robusta
         import json
@@ -408,23 +494,26 @@ No añadas texto adicional antes ni después del JSON.
             json_str = json_str[start:end+1]
             
         items = json.loads(json_str)
-        # Asegurar que sean exactamente 3 y válidos
         recommendations = []
         for it in items[:3]:
-            recommendations.append(RecommendationItem(
-                provider=it.get("provider", "desconocido"),
-                model=it.get("model", "desconocido"),
-                reason=it.get("reason", "Modelo recomendado por especialización.")
-            ))
-        return recommendations
+            # Validar que pertenezcan a los disponibles
+            provider_val = it.get("provider", "").lower()
+            model_val = it.get("model", "")
+            # Asegurarse de que no esté vacío
+            if provider_val and model_val:
+                recommendations.append(RecommendationItem(
+                    provider=provider_val,
+                    model=model_val,
+                    reason=it.get("reason", "Modelo recomendado por especialización.")
+                ))
+                
+        if len(recommendations) == 3:
+            return recommendations
+            
     except Exception as e:
-        logger.error(f"Error en recommend_models: {e}")
-        # Fallback en caso de error de parseo o API
-        return [
-            {"provider": "google", "model": "gemini-2.0-flash", "reason": "Recomendación por defecto: Gemini 2.0 Flash es excelente para propósitos generales."},
-            {"provider": "groq", "model": "llama-3.3-70b-versatile", "reason": "Llama 3.3 70B de Groq ofrece un rendimiento de vanguardia a muy baja latencia."},
-            {"provider": "openrouter", "model": "meta-llama/llama-3.3-70b-instruct:free", "reason": "Modelo alternativo gratis con alto nivel para prototipado rápido."}
-        ]
+        logger.error(f"Error en recommend_models LLM: {e}. Usando fallback por código.")
+        
+    return code_recommendations
 
 async def _fetch_provider_models_dynamically(provider: str, base_url: str, api_key: str) -> List[Dict[str, Any]]:
     """

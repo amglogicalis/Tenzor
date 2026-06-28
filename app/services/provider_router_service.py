@@ -306,6 +306,30 @@ OPENAI_COMPATIBLE_PROVIDERS = {
     "scaleway": "https://api.scaleway.ai/v1"
 }
 
+LIGHTWEIGHT_MODELS = {
+    "google": "gemini-2.0-flash-lite",
+    "groq": "llama-3.1-8b-instant",
+    "openrouter": "meta-llama/llama-3.1-8b-instruct:free",
+    "cohere": "command-light",
+    "anthropic": "claude-3-5-haiku-20241022",
+    "nvidia": "meta/llama-3.1-8b-instruct",
+    "cloudflare": "@cf/meta/llama-3-8b-instruct",
+    "huggingface": "microsoft/Phi-3-mini-4k-instruct",
+    "deepseek": "deepseek-chat",
+    "xai": "grok-2",
+    "perplexity": "sonar-reasoning",
+    "mistral": "mistral-small-latest",
+    "together": "meta-llama/Llama-3-8b-chat-hf",
+    "fireworks": "accounts/fireworks/models/llama-v3-8b-instruct",
+    "cerebras": "llama3-8b-8192",
+    "sambanova": "Meta-Llama-3.1-8B-Instruct",
+    "siliconflow": "deepseek-ai/DeepSeek-V3",
+    "zai": "glm-4-flash",
+    "novita": "meta-llama/llama-3.1-8b-instruct",
+    "scaleway": "llama-3.1-8b-instruct",
+    "watsonx": "ibm/granite-3-8b-instruct",
+}
+
 def _call_cohere(
     messages: List[Dict[str, str]],
     model: str,
@@ -746,17 +770,37 @@ class ProviderRouterService:
         Raises:
             InferenceError si todos los providers y keys fallan.
         """
+        # 1. Obtener de forma dinámica todos los proveedores que tienen claves activas
+        active_providers_in_pool = set()
+        with key_pool._lock:
+            for k in key_pool._keys.values():
+                if k.user_id == user_id or k.source == "system":
+                    active_providers_in_pool.add(k.provider)
+
         # Determinar orden de proveedores priorizando el preferido
         if force_provider:
             provider_order = [force_provider]
         elif preferred_provider:
-            default_fallbacks = ["groq", "google", "openrouter"]
+            # Poner el preferido primero
             provider_order = [preferred_provider]
+            # Determinar orden de fallback del resto de los activos del pool
+            default_fallbacks = ["groq", "google", "openrouter"]
             for p in default_fallbacks:
-                if p != preferred_provider:
+                if p != preferred_provider and p in active_providers_in_pool:
+                    provider_order.append(p)
+            for p in sorted(active_providers_in_pool):
+                if p not in provider_order:
                     provider_order.append(p)
         else:
-            provider_order = key_pool.get_ordered_providers(tier)
+            # Obtener el orden sugerido por el tier
+            suggested_order = key_pool.get_ordered_providers(tier)
+            provider_order = []
+            for p in suggested_order:
+                if p in active_providers_in_pool:
+                    provider_order.append(p)
+            for p in sorted(active_providers_in_pool):
+                if p not in provider_order:
+                    provider_order.append(p)
 
         attempts: List[ProviderAttempt] = []
 
@@ -777,14 +821,25 @@ class ProviderRouterService:
                 base_model = key_pool.get_model_for_tier(provider, tier)
 
             if not base_model:
-                logger.warning(f"Router: no hay modelo configurado para {provider}/{tier}")
-                continue
+                # Si no hay modelo configurado para el tier, intentar con el modelo liviano por defecto
+                base_model = LIGHTWEIGHT_MODELS.get(provider)
+                if not base_model:
+                    logger.warning(f"Router: no hay modelo configurado para {provider}/{tier}")
+                    continue
 
-            # Si es OpenRouter y es un modelo gratuito, generamos una lista de modelos alternativos
+            # Generamos la lista de modelos a intentar para este proveedor
             models_to_try = [base_model]
+            
+            # Fallback local (Intra-Provider): Si el principal es diferente del liviano,
+            # lo agregamos a la cola para reintentar localmente antes de cambiar de proveedor.
+            lw_model = LIGHTWEIGHT_MODELS.get(provider)
+            if lw_model and lw_model != base_model:
+                models_to_try.append(lw_model)
+
+            # Si es OpenRouter y es un modelo gratuito, agregamos también los fallbacks gratuitos
             if provider == "openrouter" and base_model.endswith(":free"):
                 for fallback_m in openrouter_free_fallbacks:
-                    if fallback_m != base_model:
+                    if fallback_m not in models_to_try:
                         models_to_try.append(fallback_m)
 
             rpm_limit = PROVIDER_RPM_LIMITS.get(provider, 20)

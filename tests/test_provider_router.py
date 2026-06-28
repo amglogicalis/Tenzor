@@ -580,3 +580,35 @@ class TestProviderRouter:
                 force_provider="watsonx",
             )
         assert result.provider == "watsonx"
+
+    def test_intra_provider_fallback_to_lightweight(self):
+        """Si el modelo preferido de un provider falla, debe intentar el modelo liviano de ese mismo provider."""
+        pool = self._make_fresh_pool("google")
+        router = ProviderRouterService()
+        
+        # Mocker _dispatch para que falle con 429 para 'gemini-2.5-flash',
+        # pero tenga éxito para el modelo liviano 'gemini-2.0-flash-lite'
+        called_models = []
+        def mock_dispatch(provider, model, messages, api_key, system_prompt, temperature, max_tokens):
+            called_models.append(model)
+            if model == "gemini-2.5-flash":
+                raise _RateLimitError(429, "rate limit", retry_after=10)
+            return InferenceResult(
+                content="ok-lightweight", provider="google", model=model,
+                key_id="", tokens_in=10, tokens_out=20, latency_ms=100,
+                finish_reason="stop"
+            )
+
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, patch.object(router, "_dispatch", side_effect=mock_dispatch):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="pro",
+                preferred_provider="google",
+                preferred_model="gemini-2.5-flash"
+            )
+            
+        assert result.provider == "google"
+        assert result.content == "ok-lightweight"
+        assert "gemini-2.5-flash" in called_models
+        assert "gemini-2.0-flash-lite" in called_models
