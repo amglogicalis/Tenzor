@@ -300,7 +300,10 @@ OPENAI_COMPATIBLE_PROVIDERS = {
     "sambanova": "https://api.sambanova.ai/v1",
     "cerebras": "https://api.cerebras.ai/v1",
     "siliconflow": "https://api.siliconflow.cn/v1",
-    "nvidia": "https://integrate.api.nvidia.com/v1"
+    "nvidia": "https://integrate.api.nvidia.com/v1",
+    "zai": "https://api.z.ai/v1",
+    "novita": "https://api.novita.ai/v3/openai",
+    "scaleway": "https://api.scaleway.ai/v1"
 }
 
 def _call_cohere(
@@ -519,6 +522,94 @@ def _call_huggingface(
         tokens_out=tokens_out,
         latency_ms=round(latency, 1),
         finish_reason="stop",
+    )
+
+
+def _call_watsonx(
+    messages: List[Dict[str, str]],
+    model: str,
+    api_key: str,
+    temperature: float,
+    max_tokens: Optional[int],
+    system_prompt: Optional[str],
+) -> InferenceResult:
+    """Llama a la API compatible con OpenAI de IBM Watsonx mediante un token de IAM generado al vuelo."""
+    # Descomponer clave del usuario en APIKEY:PROJECT_ID:REGION
+    parts = api_key.split(":")
+    apikey = parts[0]
+    project_id = parts[1] if len(parts) > 1 else ""
+    region = parts[2] if len(parts) > 2 else "us-south"
+    
+    # 1. Generar token de IAM mediante IBM Cloud
+    token_url = "https://iam.cloud.ibm.com/identity/token"
+    token_headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json"
+    }
+    token_payload = f"grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey={apikey}"
+    
+    t0 = time.monotonic()
+    with httpx.Client(timeout=10.0) as client:
+        token_resp = client.post(token_url, headers=token_headers, content=token_payload)
+        
+    if token_resp.status_code != 200:
+        if token_resp.status_code in (400, 401, 403):
+            raise _AuthError(token_resp.status_code, f"Error de autenticación de IBM IAM: {token_resp.text}")
+        else:
+            raise _ProviderError(token_resp.status_code, f"Error al generar token de IBM Cloud: {token_resp.text}")
+            
+    iam_token = token_resp.json().get("access_token")
+    if not iam_token:
+        raise _AuthError(401, "No se encontró access_token en la respuesta de IBM IAM")
+        
+    # 2. Realizar llamada a Watsonx Chat Completions
+    url = f"https://{region}.ml.cloud.ibm.com/ml/v1/chat/completions?version=2024-03-14"
+    headers = {
+        "Authorization": f"Bearer {iam_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    
+    payload_messages = []
+    if system_prompt:
+        payload_messages.append({"role": "system", "content": system_prompt})
+    payload_messages.extend(messages)
+    
+    payload = {
+        "model": model,
+        "messages": payload_messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens or 2048,
+    }
+    if project_id:
+        payload["project_id"] = project_id
+        
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(url, headers=headers, json=payload)
+        
+    latency = (time.monotonic() - t0) * 1000
+    
+    if resp.status_code == 429:
+        retry_after = _parse_retry_after(resp.headers)
+        raise _RateLimitError(resp.status_code, resp.text, retry_after)
+    if resp.status_code in (401, 403):
+        raise _AuthError(resp.status_code, resp.text)
+    if resp.status_code != 200:
+        raise _ProviderError(resp.status_code, resp.text)
+        
+    data = resp.json()
+    choice = data["choices"][0]
+    usage = data.get("usage", {})
+    
+    return InferenceResult(
+        content=choice["message"]["content"] or "",
+        provider="watsonx",
+        model=model,
+        key_id="",
+        tokens_in=usage.get("prompt_tokens", 0),
+        tokens_out=usage.get("completion_tokens", 0),
+        latency_ms=round(latency, 1),
+        finish_reason=choice.get("finish_reason", "stop"),
     )
 
 
@@ -874,6 +965,8 @@ class ProviderRouterService:
                 max_tokens=max_tokens,
                 system_prompt=system_prompt,
             )
+        elif provider == "watsonx":
+            return _call_watsonx(**kwargs)
         elif provider == "openrouter":
             return _call_openrouter(**kwargs)
         elif provider in OPENAI_COMPATIBLE_PROVIDERS:

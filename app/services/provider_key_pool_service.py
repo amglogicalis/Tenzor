@@ -132,6 +132,26 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
         "balanced": "deepseek-ai/DeepSeek-V3",
         "pro":      "deepseek-ai/DeepSeek-R1",
     },
+    "zai": {
+        "fast":     "glm-4-flash",
+        "balanced": "glm-4-flash",
+        "pro":      "glm-4-flash",
+    },
+    "novita": {
+        "fast":     "meta-llama/llama-3.1-8b-instruct",
+        "balanced": "deepseek/deepseek_v3",
+        "pro":      "deepseek/deepseek-r1",
+    },
+    "scaleway": {
+        "fast":     "llama-3.1-8b-instruct",
+        "balanced": "mistral-nemo-instruct-2407",
+        "pro":      "llama-3.1-70b-instruct",
+    },
+    "watsonx": {
+        "fast":     "ibm/granite-3-8b-instruct",
+        "balanced": "meta-llama/llama-3-8b-instruct",
+        "pro":      "meta-llama/llama-3-3-70b-instruct",
+    },
 }
 
 # Orden de providers por tier (primary → fallback → last-resort)

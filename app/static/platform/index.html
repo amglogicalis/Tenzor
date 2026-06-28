@@ -473,6 +473,10 @@
     .provider-nvidia { background: rgba(118, 185, 0, 0.15); color: #76b900; }
     .provider-cloudflare { background: rgba(243, 128, 32, 0.15); color: #f38020; }
     .provider-huggingface { background: rgba(255, 210, 0, 0.15); color: #ffd200; }
+    .provider-zai { background: rgba(50, 150, 250, 0.15); color: #3296fa; }
+    .provider-novita { background: rgba(250, 50, 100, 0.15); color: #fa3264; }
+    .provider-scaleway { background: rgba(81, 0, 182, 0.15); color: #9c5cff; }
+    .provider-watsonx { background: rgba(15, 98, 254, 0.15); color: #0f62fe; }
     .model-item-free-badge {
       font-size: 9px; font-weight: 700; color: #00f59c; border: 1px solid #00f59c;
       padding: 0 4px; border-radius: 3px; margin-left: 6px; text-transform: uppercase;
@@ -853,6 +857,10 @@
                 <option value="nvidia">NVIDIA NIM</option>
                 <option value="cloudflare">Cloudflare Workers AI</option>
                 <option value="huggingface">Hugging Face</option>
+                <option value="zai">Z.ai</option>
+                <option value="novita">Novita AI</option>
+                <option value="scaleway">Scaleway</option>
+                <option value="watsonx">IBM Watsonx</option>
               </select>
             </div>
             <div class="form-group" style="margin:0">
@@ -863,6 +871,7 @@
               <label class="form-label" id="key-api-label">Clave API</label>
               <input type="password" id="key-api-key" placeholder="AQ... o gsk_..." style="background:var(--bg-input)" />
               <div id="cloudflare-note" style="display:none; font-size:10px; color:var(--text-3); margin-top:4px">Para Cloudflare ingresa en formato ID_DE_CUENTA:API_TOKEN</div>
+              <div id="watsonx-note" style="display:none; font-size:10px; color:var(--text-3); margin-top:4px">Para Watsonx ingresa en formato APIKEY:PROJECT_ID:REGION</div>
             </div>
           </div>
           <div style="margin-top:16px; display:flex; justify-content:flex-end">
@@ -1827,16 +1836,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Detección dinámica de nota aclaratoria para Cloudflare
+  // Detección dinámica de notas aclaratorias
   const providerSelect = document.getElementById('key-provider');
   const cfNote = document.getElementById('cloudflare-note');
-  if (providerSelect && cfNote) {
+  const wxNote = document.getElementById('watsonx-note');
+  if (providerSelect) {
     providerSelect.addEventListener('change', () => {
-      if (providerSelect.value === 'cloudflare') {
-        cfNote.style.display = 'block';
-      } else {
-        cfNote.style.display = 'none';
-      }
+      if (cfNote) cfNote.style.display = providerSelect.value === 'cloudflare' ? 'block' : 'none';
+      if (wxNote) wxNote.style.display = providerSelect.value === 'watsonx' ? 'block' : 'none';
     });
   }
 });
@@ -1867,6 +1874,24 @@ function selectModel(modelId, provider, modelName) {
   } else if (provider === 'cloudflare') {
     tier = 'fast';
   } else if (provider === 'huggingface') {
+    tier = 'fast';
+  } else if (provider === 'zai') {
+    tier = 'fast';
+  } else if (provider === 'novita' && modelId.includes('r1')) {
+    tier = 'pro';
+  } else if (provider === 'novita' && modelId.includes('v3')) {
+    tier = 'balanced';
+  } else if (provider === 'novita') {
+    tier = 'fast';
+  } else if (provider === 'scaleway' && modelId.includes('70b')) {
+    tier = 'pro';
+  } else if (provider === 'scaleway' && modelId.includes('nemo')) {
+    tier = 'balanced';
+  } else if (provider === 'scaleway') {
+    tier = 'fast';
+  } else if (provider === 'watsonx' && modelId.includes('70b')) {
+    tier = 'pro';
+  } else if (provider === 'watsonx') {
     tier = 'fast';
   }
   document.getElementById('ca-tier').value = tier;

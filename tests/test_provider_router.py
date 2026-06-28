@@ -521,3 +521,62 @@ class TestProviderRouter:
                 force_provider="huggingface",
             )
         assert result.provider == "huggingface"
+
+    def test_successful_call_zai(self):
+        pool = self._make_fresh_pool("zai")
+        router = ProviderRouterService()
+        expected = make_result("zai", "glm-4-flash")
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, \
+             patch("app.services.provider_router_service._call_openai_compatible", return_value=expected):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="fast",
+                force_provider="zai",
+            )
+        assert result.provider == "zai"
+
+    def test_successful_call_novita(self):
+        pool = self._make_fresh_pool("novita")
+        router = ProviderRouterService()
+        expected = make_result("novita", "deepseek/deepseek_v3")
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, \
+             patch("app.services.provider_router_service._call_openai_compatible", return_value=expected):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="balanced",
+                force_provider="novita",
+            )
+        assert result.provider == "novita"
+
+    def test_successful_call_scaleway(self):
+        pool = self._make_fresh_pool("scaleway")
+        router = ProviderRouterService()
+        expected = make_result("scaleway", "llama-3.1-8b-instruct")
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, \
+             patch("app.services.provider_router_service._call_openai_compatible", return_value=expected):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="fast",
+                force_provider="scaleway",
+            )
+        assert result.provider == "scaleway"
+
+    def test_successful_call_watsonx(self):
+        pool = self._make_fresh_pool("watsonx")
+        for key in pool._keys.values():
+            if key.provider == "watsonx":
+                key.api_key = "myapikey:myprojectid:us-south"
+        router = ProviderRouterService()
+        expected = make_result("watsonx", "ibm/granite-3-8b-instruct")
+        p1, p2, p3 = self._patches(pool)
+        with p1, p2, p3, \
+             patch("app.services.provider_router_service._call_watsonx", return_value=expected):
+            result = router.infer(
+                messages=[{"role": "user", "content": "Hola"}],
+                tier="fast",
+                force_provider="watsonx",
+            )
+        assert result.provider == "watsonx"

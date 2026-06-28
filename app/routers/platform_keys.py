@@ -63,6 +63,29 @@ HUGGINGFACE_MODELS = [
     {"id": "google/gemma-2-9b-it", "name": "Gemma 2 9B IT (Hugging Face)", "provider": "huggingface", "free": True},
 ]
 
+ZAI_MODELS = [
+    {"id": "glm-4-flash", "name": "GLM 4 Flash (Z.ai)", "provider": "zai", "free": True},
+    {"id": "glm-4v-flash", "name": "GLM 4V Flash Multimodal (Z.ai)", "provider": "zai", "free": True},
+]
+
+NOVITA_MODELS = [
+    {"id": "deepseek/deepseek_v3", "name": "DeepSeek V3 (Novita)", "provider": "novita", "free": False},
+    {"id": "deepseek/deepseek-r1", "name": "DeepSeek R1 (Novita)", "provider": "novita", "free": False},
+    {"id": "meta-llama/llama-3.1-8b-instruct", "name": "Llama 3.1 8B Instruct (Novita)", "provider": "novita", "free": True},
+]
+
+SCALEWAY_MODELS = [
+    {"id": "llama-3.1-8b-instruct", "name": "Llama 3.1 8B (Scaleway)", "provider": "scaleway", "free": True},
+    {"id": "llama-3.1-70b-instruct", "name": "Llama 3.1 70B (Scaleway)", "provider": "scaleway", "free": False},
+    {"id": "mistral-nemo-instruct-2407", "name": "Mistral Nemo (Scaleway)", "provider": "scaleway", "free": True},
+]
+
+WATSONX_MODELS = [
+    {"id": "meta-llama/llama-3-3-70b-instruct", "name": "Llama 3.3 70B (Watsonx)", "provider": "watsonx", "free": False},
+    {"id": "ibm/granite-3-8b-instruct", "name": "Granite 3.0 8B (Watsonx)", "provider": "watsonx", "free": True},
+    {"id": "meta-llama/llama-3-8b-instruct", "name": "Llama 3 8B (Watsonx)", "provider": "watsonx", "free": True},
+]
+
 GROQ_MODELS = [
     {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B Versatile", "provider": "groq", "free": True},
     {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 8B Instant", "provider": "groq", "free": True},
@@ -256,7 +279,10 @@ async def list_available_models(
         "together": TOGETHER_MODELS,
         "fireworks": FIREWORKS_MODELS,
         "siliconflow": SILICONFLOW_MODELS,
-        "nvidia": NVIDIA_MODELS
+        "nvidia": NVIDIA_MODELS,
+        "zai": ZAI_MODELS,
+        "novita": NOVITA_MODELS,
+        "scaleway": SCALEWAY_MODELS
     }
 
     for provider, static_list in compatibles.items():
@@ -283,6 +309,7 @@ async def list_available_models(
                 models.extend(dyn_models)
             else:
                 models.extend(static_list)
+
     # Cohere: Listado dinámico
     if "cohere" in active_providers:
         cohere_key = user_keys_map.get("cohere")
@@ -305,6 +332,10 @@ async def list_available_models(
     # Hugging Face: Listado estático
     if "huggingface" in active_providers:
         models.extend(HUGGINGFACE_MODELS)
+
+    # IBM Watsonx: Listado estático
+    if "watsonx" in active_providers:
+        models.extend(WATSONX_MODELS)
 
     return models
 
