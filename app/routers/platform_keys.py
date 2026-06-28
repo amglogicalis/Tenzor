@@ -186,9 +186,16 @@ async def list_available_models(
 
     models = []
     
-    # Google Gemini: Listado estático
+    # Google Gemini: Listado dinámico
     if "google" in active_providers:
-        models.extend(GOOGLE_MODELS)
+        google_key = user_keys_map.get("google") or config.GEMINI_API_KEY
+        google_models_dyn = []
+        if google_key:
+            google_models_dyn = await _fetch_google_models_dynamically(google_key)
+        if google_models_dyn:
+            models.extend(google_models_dyn)
+        else:
+            models.extend(GOOGLE_MODELS)
         
     # OpenRouter: Llamada dinámica a su API
     if "openrouter" in active_providers:
@@ -402,6 +409,58 @@ async def _fetch_provider_models_dynamically(provider: str, base_url: str, api_k
                 return models
     except Exception as e:
         logger.warning(f"No se pudieron obtener modelos dinámicos para {provider} desde {url}: {e}")
+        
+    return []
+
+
+async def _fetch_google_models_dynamically(api_key: str) -> List[Dict[str, Any]]:
+    """
+    Intenta obtener dinámicamente los modelos disponibles de Google Gemini usando su API.
+    Si falla, hace fallback a GOOGLE_MODELS.
+    """
+    now = time.time()
+    key_hash = api_key[-8:] if len(api_key) > 8 else "key"
+    cache_key = f"google_{key_hash}"
+    
+    if cache_key in _providers_models_cache:
+        cached = _providers_models_cache[cache_key]
+        if now - cached["last_updated"] < 300: # 5 minutos
+            return cached["data"]
+            
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        async with httpx.AsyncClient(timeout=3.5) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json().get("models", [])
+                models = []
+                for m in data:
+                    model_id = m.get("name", "")
+                    if model_id.startswith("models/"):
+                        model_id = model_id.replace("models/", "")
+                    
+                    # Filtrar sólo modelos generativos de texto
+                    supported_methods = m.get("supportedGenerationMethods", [])
+                    if "generateContent" not in supported_methods:
+                        continue
+                        
+                    model_name = m.get("displayName") or model_id
+                    models.append({
+                        "id": model_id,
+                        "name": f"{model_name} (GOOGLE)",
+                        "provider": "google",
+                        "free": True
+                    })
+                
+                if models:
+                    _providers_models_cache[cache_key] = {
+                        "data": models,
+                        "last_updated": now
+                    }
+                    logger.info(f"Detección dinámica: {len(models)} modelos recuperados de Google")
+                    return models
+    except Exception as e:
+        logger.warning(f"No se pudieron obtener modelos dinámicos para Google: {e}")
         
     return []
 
