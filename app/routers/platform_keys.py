@@ -337,6 +337,8 @@ async def list_available_models(
     if "watsonx" in active_providers:
         models.extend(WATSONX_MODELS)
 
+    return models
+
 @router.post("/recommend", response_model=List[RecommendationItem], summary="Asistente de recomendación de modelos")
 async def recommend_models(
     req: RecommendRequest,
