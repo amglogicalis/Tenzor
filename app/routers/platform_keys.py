@@ -20,6 +20,9 @@ _openrouter_models_cache: Dict[str, Any] = {
     "last_updated": 0
 }
 
+# Cache en memoria para otros proveedores (5 minutos de expiración)
+_providers_models_cache: Dict[str, Dict[str, Any]] = {}
+
 # Modelos estáticos
 GOOGLE_MODELS = [
     {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash", "provider": "google", "free": True},
@@ -160,9 +163,11 @@ async def list_available_models(
     current_user: dict = Depends(require_platform_user)
 ):
     """
-    Devuelve la lista de modelos disponibles (Google, Groq y OpenRouter)
-    según las API keys activas en el sistema o del usuario.
+    Devuelve la lista de modelos disponibles según las API keys activas en el sistema o del usuario.
+    Intenta obtener modelos dinámicamente desde sus APIs oficiales y hace fallback a estáticos si falla.
     """
+    from app.services.provider_router_service import OPENAI_COMPATIBLE_PROVIDERS
+
     # 1. Obtener qué claves tiene configuradas el usuario
     user_keys = provider_keys_db_service.list_keys(user_id=current_user["user_id"])
     active_providers = {k["provider"] for k in user_keys if k["is_active"]}
@@ -175,32 +180,67 @@ async def list_available_models(
     if config.OPENROUTER_API_KEY:
         active_providers.add("openrouter")
 
+    # Obtener claves descifradas del usuario para poder hacer la llamada dinámica
+    decrypted_keys = provider_keys_db_service.get_decrypted_user_keys(current_user["user_id"])
+    user_keys_map = {k["provider"]: k["api_key"] for k in decrypted_keys}
+
     models = []
+    
+    # Google Gemini: Listado estático
     if "google" in active_providers:
         models.extend(GOOGLE_MODELS)
-    if "groq" in active_providers:
-        models.extend(GROQ_MODELS)
+        
+    # OpenRouter: Llamada dinámica a su API
     if "openrouter" in active_providers:
         openrouter_list = await _fetch_openrouter_models()
         models.extend(openrouter_list)
-    if "deepseek" in active_providers:
-        models.extend(DEEPSEEK_MODELS)
-    if "xai" in active_providers:
-        models.extend(XAI_MODELS)
-    if "perplexity" in active_providers:
-        models.extend(PERPLEXITY_MODELS)
-    if "mistral" in active_providers:
-        models.extend(MISTRAL_MODELS)
-    if "cerebras" in active_providers:
-        models.extend(CEREBRAS_MODELS)
-    if "sambanova" in active_providers:
-        models.extend(SAMBANOVA_MODELS)
-    if "together" in active_providers:
-        models.extend(TOGETHER_MODELS)
-    if "fireworks" in active_providers:
-        models.extend(FIREWORKS_MODELS)
-    if "siliconflow" in active_providers:
-        models.extend(SILICONFLOW_MODELS)
+
+    # Groq (con base_url propia o config.GROQ_API_KEY)
+    if "groq" in active_providers:
+        groq_key = user_keys_map.get("groq") or config.GROQ_API_KEY
+        groq_models_dyn = []
+        if groq_key:
+            groq_models_dyn = await _fetch_provider_models_dynamically("groq", "https://api.groq.com/openai/v1", groq_key)
+        if groq_models_dyn:
+            models.extend(groq_models_dyn)
+        else:
+            models.extend(GROQ_MODELS)
+
+    # Otros compatibles
+    compatibles = {
+        "deepseek": DEEPSEEK_MODELS,
+        "xai": XAI_MODELS,
+        "perplexity": PERPLEXITY_MODELS,
+        "mistral": MISTRAL_MODELS,
+        "cerebras": CEREBRAS_MODELS,
+        "sambanova": SAMBANOVA_MODELS,
+        "together": TOGETHER_MODELS,
+        "fireworks": FIREWORKS_MODELS,
+        "siliconflow": SILICONFLOW_MODELS
+    }
+
+    for provider, static_list in compatibles.items():
+        if provider in active_providers:
+            # Obtener clave (usuario o sistema si aplica)
+            key = user_keys_map.get(provider)
+            # También soportar claves de sistema si se añadieron en config
+            if not key:
+                if provider == "deepseek":
+                    key = getattr(config, "DEEPSEEK_API_KEY", None)
+                elif provider == "xai":
+                    key = getattr(config, "XAI_API_KEY", None)
+            
+            # Buscar base URL en el router
+            base_url = OPENAI_COMPATIBLE_PROVIDERS.get(provider)
+            
+            dyn_models = []
+            if key and base_url:
+                dyn_models = await _fetch_provider_models_dynamically(provider, base_url, key)
+                
+            if dyn_models:
+                models.extend(dyn_models)
+            else:
+                models.extend(static_list)
 
     return models
 
@@ -290,6 +330,81 @@ No añadas texto adicional antes ni después del JSON.
             {"provider": "groq", "model": "llama-3.3-70b-versatile", "reason": "Llama 3.3 70B de Groq ofrece un rendimiento de vanguardia a muy baja latencia."},
             {"provider": "openrouter", "model": "meta-llama/llama-3.3-70b-instruct:free", "reason": "Modelo alternativo gratis con alto nivel para prototipado rápido."}
         ]
+
+async def _fetch_provider_models_dynamically(provider: str, base_url: str, api_key: str) -> List[Dict[str, Any]]:
+    """
+    Intenta obtener dinámicamente los modelos del proveedor desde su endpoint de API OpenAI-compatible.
+    Si falla, devuelve una lista vacía para que el llamador haga fallback a la lista estática.
+    """
+    now = time.time()
+    # Cache key basada en proveedor y hash parcial de la clave
+    key_hash = api_key[-8:] if len(api_key) > 8 else "key"
+    cache_key = f"{provider}_{key_hash}"
+    
+    if cache_key in _providers_models_cache:
+        cached = _providers_models_cache[cache_key]
+        if now - cached["last_updated"] < 300: # 5 minutos
+            return cached["data"]
+            
+    url = f"{base_url.rstrip('/')}/models"
+    
+    # Ajustes finos de URLs específicas
+    if provider == "groq":
+        url = "https://api.groq.com/openai/v1/models"
+    elif provider == "together":
+        url = "https://api.together.xyz/v1/models"
+    elif provider == "fireworks":
+        url = "https://api.fireworks.ai/inference/v1/models"
+    elif provider == "siliconflow":
+        url = "https://api.siliconflow.cn/v1/models"
+        
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=3.5) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                models = []
+                for m in data:
+                    model_id = m.get("id")
+                    if not model_id:
+                        continue
+                        
+                    # Estimar si es gratis
+                    is_free = ":free" in model_id
+                    
+                    if provider == "mistral" and ("codestral" in model_id.lower() or "small" in model_id.lower() or "ministral" in model_id.lower()):
+                        is_free = True
+                    elif provider == "groq" and ("llama-3.1-8b" in model_id.lower() or "gemma2-9b" in model_id.lower()):
+                        is_free = True
+                    elif provider == "siliconflow" and ("free" in model_id.lower() or "deepseek-v3" in model_id.lower() or "deepseek-r1" in model_id.lower()):
+                        is_free = True
+                    elif provider == "sambanova" and ("8b" in model_id.lower() or "free" in model_id.lower()):
+                        is_free = True
+                        
+                    model_name = m.get("name") or model_id
+                    models.append({
+                        "id": model_id,
+                        "name": f"{model_name} ({provider.upper()})",
+                        "provider": provider,
+                        "free": is_free
+                    })
+                
+                # Guardar en caché
+                _providers_models_cache[cache_key] = {
+                    "data": models,
+                    "last_updated": now
+                }
+                logger.info(f"Detección dinámica: {len(models)} modelos recuperados de {provider}")
+                return models
+    except Exception as e:
+        logger.warning(f"No se pudieron obtener modelos dinámicos para {provider} desde {url}: {e}")
+        
+    return []
+
 
 async def _fetch_openrouter_models() -> List[Dict[str, Any]]:
     """Obtiene de forma segura la lista de modelos de OpenRouter con caché en memoria."""
