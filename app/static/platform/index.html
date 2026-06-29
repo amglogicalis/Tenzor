@@ -661,6 +661,24 @@
       color: var(--primary-light);
       font-weight: 600;
     }
+
+    /* ── Onboarding Tour Styles ─────────────────────────────────────────── */
+    .onboarding-slide {
+      animation: fadeIn var(--transition) forwards;
+    }
+    .onboarding-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border); transition: background var(--transition), transform var(--transition);
+    }
+    .onboarding-dot.active {
+      background: var(--primary);
+      transform: scale(1.2);
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
   </style>
 </head>
 <body>
@@ -765,6 +783,11 @@
     <div class="nav-section-label" style="margin-top:16px">Herramientas</div>
     <div class="nav-item" id="nav-knowledge" onclick="navigate('knowledge')">
       <span class="nav-item-icon">📚</span> Conocimiento
+    </div>
+
+    <div class="nav-section-label" style="margin-top:16px">Ayuda</div>
+    <div class="nav-item" id="nav-help" onclick="openOnboarding(true)">
+      <span class="nav-item-icon">❓</span> Guía de Inicio
     </div>
 
     <div class="sidebar-spacer"></div>
@@ -1035,7 +1058,38 @@
             <button class="btn btn-purple" onclick="addProviderKey()">Añadir Clave</button>
           </div>
         </div>
+
+        <!-- Personal Data & Password Reset Card -->
+        <div class="profile-card">
+          <div class="profile-card-title">
+            <span>👤</span> Datos Personales y Seguridad
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; margin-bottom:24px" class="add-key-form-grid">
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Nombre</label>
+              <div id="profile-display-name-val" style="padding:10px 14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-2); font-size:14px; box-sizing:border-box">—</div>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Email</label>
+              <div id="profile-email-val" style="padding:10px 14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-2); font-size:14px; box-sizing:border-box">—</div>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label class="form-label">Nombre de Usuario</label>
+              <div id="profile-username-val" style="padding:10px 14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-2); font-size:14px; box-sizing:border-box">—</div>
+            </div>
+          </div>
+          <hr style="border:0; border-top:1px solid var(--border); margin:24px 0" />
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px">
+            <div style="font-size:13px; color:var(--text-3)">
+              ¿Quieres cambiar tu contraseña? Te enviaremos un correo de recuperación seguro para restablecerla.
+            </div>
+            <button class="btn btn-purple" id="btn-profile-reset-pwd" onclick="triggerProfilePasswordReset()">
+              Restablecer Contraseña
+            </button>
+          </div>
+        </div>
       </div>
+
     </div>
 
   </main>
@@ -1180,6 +1234,133 @@
   </div>
 </div>
 
+<!-- Onboarding Tour Modal -->
+<div class="modal-overlay" id="modal-onboarding" style="z-index:900">
+  <div class="modal" style="max-width:620px; width:95%; height:auto; max-height:90vh; display:flex; flex-direction:column">
+    <div class="modal-header" style="border-bottom:none; padding-bottom:0">
+      <div class="modal-title" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-3)">Guía de Inicio Rápido</div>
+      <button class="modal-close" onclick="closeOnboardingModal()">✕</button>
+    </div>
+    <div class="modal-body" style="flex:1; overflow-y:auto; padding:10px 24px 24px 24px">
+      <!-- Slide 1: Bienvenida -->
+      <div class="onboarding-slide" id="onboarding-slide-0">
+        <div style="text-align:center; padding:20px 10px">
+          <div style="font-size:54px; margin-bottom:16px; animation: pulse 2.2s infinite; display:inline-block">🤖</div>
+          <h2 style="font-size:24px; color:#fff; margin-bottom:12px; font-weight:700">Bienvenido a <span style="color:#eb393f">Arzor AIs</span></h2>
+          <p style="color:var(--text-2); font-size:14.5px; line-height:1.6; max-width:480px; margin:0 auto">
+            Tu plataforma personal y privada de Inteligencia Artificial. Arzor te permite conectar tus propios modelos de lenguaje gratis y de forma privada (BYOK - Bring Your Own Key). Sin suscripciones, sin límites de plataforma.
+          </p>
+        </div>
+      </div>
+      
+      <!-- Slide 2: API Keys Gratis -->
+      <div class="onboarding-slide" id="onboarding-slide-1" style="display:none">
+        <div style="padding:10px 0">
+          <h3 style="font-size:18px; color:#fff; margin-bottom:8px; font-weight:600">1. Consigue tus API Keys Gratis 🔑</h3>
+          <p style="color:var(--text-3); font-size:13px; margin-bottom:16px; line-height:1.5">
+            Arzor funciona con las llaves que tú configures. Muchos proveedores ofrecen un "free tier" (nivel gratuito) excelente para uso personal. Consíguelas aquí:
+          </p>
+          <div style="display:flex; flex-direction:column; gap:10px">
+            <a href="https://aistudio.google.com/" target="_blank" style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:6px; transition:border-color 0.2s">
+              <div style="display:flex; align-items:center; gap:10px">
+                <span style="font-size:20px">🪐</span>
+                <div>
+                  <div style="font-weight:600; font-size:13px; color:#fff">Google Gemini (AI Studio)</div>
+                  <div style="font-size:11px; color:var(--text-3)">Límites generosos y modelos Gemini 2.0 / 1.5 gratis</div>
+                </div>
+              </div>
+              <span style="color:var(--primary-light); font-size:12px">Obtener clave ➔</span>
+            </a>
+            <a href="https://console.groq.com/" target="_blank" style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:6px; transition:border-color 0.2s">
+              <div style="display:flex; align-items:center; gap:10px">
+                <span style="font-size:20px">⚡</span>
+                <div>
+                  <div style="font-weight:600; font-size:13px; color:#fff">Groq Console</div>
+                  <div style="font-size:11px; color:var(--text-3)">Respuestas a velocidad récord con Llama 3 e inmejorable RPM</div>
+                </div>
+              </div>
+              <span style="color:var(--primary-light); font-size:12px">Obtener clave ➔</span>
+            </a>
+            <a href="https://openrouter.ai/" target="_blank" style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:6px; transition:border-color 0.2s">
+              <div style="display:flex; align-items:center; gap:10px">
+                <span style="font-size:20px">🔮</span>
+                <div>
+                  <div style="font-weight:600; font-size:13px; color:#fff">OpenRouter</div>
+                  <div style="font-size:11px; color:var(--text-3)">Accede a cientos de modelos (busca los etiquetados como <code>:free</code>)</div>
+                </div>
+              </div>
+              <span style="color:var(--primary-light); font-size:12px">Obtener clave ➔</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Slide 3: Configurar Claves -->
+      <div class="onboarding-slide" id="onboarding-slide-2" style="display:none">
+        <div style="padding:10px 0">
+          <h3 style="font-size:18px; color:#fff; margin-bottom:8px; font-weight:600">2. Configura las Claves en tu Perfil ⚙️</h3>
+          <p style="color:var(--text-2); font-size:13.5px; line-height:1.5">
+            Una vez obtenida tu clave:
+          </p>
+          <ul style="color:var(--text-3); font-size:13px; line-height:1.6; padding-left:20px; margin:8px 0 16px 0">
+            <li>Ve a la pestaña <strong>Mi Perfil</strong> en la barra lateral.</li>
+            <li>En "Añadir nueva clave", selecciona el proveedor (ej: <em>Google Gemini</em>).</li>
+            <li>Pega tu clave API y dale un nombre para recordarla.</li>
+          </ul>
+          <div style="background:rgba(235,57,63,0.05); border:1px solid rgba(235,57,63,0.2); border-radius:6px; padding:12px; font-size:12px; color:var(--primary-light); line-height:1.5">
+            <strong>💡 Nota importante:</strong> Tus claves se encriptan de forma segura y solo se utilizan para conectarse con los modelos de IA desde tu propio servidor.
+          </div>
+        </div>
+      </div>
+      
+      <!-- Slide 4: Agentes y RAG -->
+      <div class="onboarding-slide" id="onboarding-slide-3" style="display:none">
+        <div style="padding:10px 0">
+          <h3 style="font-size:18px; color:#fff; margin-bottom:8px; font-weight:600">3. Agentes, RAG y Round Tables 🔮</h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px">
+            <div style="padding:12px; background:rgba(255,255,255,0.01); border:1px solid var(--border); border-radius:8px">
+              <h4 style="font-size:14px; color:#fff; margin-bottom:6px; font-weight:600">📚 Conocimiento (RAG)</h4>
+              <p style="color:var(--text-3); font-size:11.5px; line-height:1.5; margin:0">
+                Sube PDFs, archivos de texto o documentación técnica a la pestaña de "Conocimiento". Tus agentes los usarán de contexto para responder con tus datos locales.
+              </p>
+            </div>
+            <div style="padding:12px; background:rgba(255,255,255,0.01); border:1px solid var(--border); border-radius:8px">
+              <h4 style="font-size:14px; color:#fff; margin-bottom:6px; font-weight:600">🔵 Round Table (Debates)</h4>
+              <p style="color:var(--text-3); font-size:11.5px; line-height:1.5; margin:0">
+                Crea mesas de debate redondas seleccionando entre 2 y 6 agentes especializados. Escribe un tema de discusión y observa cómo debaten de forma autónoma.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Slide 5: Finalizar -->
+      <div class="onboarding-slide" id="onboarding-slide-4" style="display:none">
+        <div style="text-align:center; padding:20px 10px">
+          <div style="font-size:54px; margin-bottom:16px">🚀</div>
+          <h2 style="font-size:22px; color:#fff; margin-bottom:12px; font-weight:700">¡Todo listo para empezar!</h2>
+          <p style="color:var(--text-2); font-size:14px; line-height:1.6; max-width:440px; margin:0 auto 24px auto">
+            Ya conoces los conceptos básicos de Arzor. Ahora es momento de añadir tu primera clave API y dar vida a tus agentes.
+          </p>
+          <button class="btn btn-purple" style="font-size:14px; padding:12px 30px" onclick="completeOnboarding()">Iniciar mi experiencia ➔</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-footer" style="display:flex; align-items:center; justify-content:space-between; padding-top:16px; border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" id="onboarding-prev-btn" onclick="navOnboarding(-1)" style="visibility:hidden">Anterior</button>
+      <div style="display:flex; gap:6px" id="onboarding-dots">
+        <span class="onboarding-dot active"></span>
+        <span class="onboarding-dot"></span>
+        <span class="onboarding-dot"></span>
+        <span class="onboarding-dot"></span>
+        <span class="onboarding-dot"></span>
+      </div>
+      <button class="btn btn-purple" id="onboarding-next-btn" onclick="navOnboarding(1)">Siguiente</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -1224,15 +1405,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-function showApp() {
+async function showApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  const u = state.user;
-  if (u) {
-    document.getElementById('top-avatar').textContent = (u.username || u.display_name || 'U')[0].toUpperCase();
-    document.getElementById('top-username').textContent = u.display_name || u.username || 'Usuario';
-    document.getElementById('dash-greeting').textContent = `Bienvenido de vuelta, ${u.display_name || u.username} 👋`;
+  
+  try {
+    const profile = await api('GET', '/platform/auth/me');
+    if (profile) {
+      state.user = { 
+        user_id: profile.id, 
+        username: profile.username, 
+        display_name: profile.display_name,
+        email: state.user?.email || localStorage.getItem('arzor_email') || '',
+        onboarding_completed: profile.onboarding_completed 
+      };
+      localStorage.setItem('arzor_user', JSON.stringify(state.user));
+      
+      document.getElementById('top-avatar').textContent = (profile.username || 'U')[0].toUpperCase();
+      document.getElementById('top-username').textContent = profile.display_name || profile.username || 'Usuario';
+      document.getElementById('dash-greeting').textContent = `Bienvenido de vuelta, ${profile.display_name || profile.username} 👋`;
+      
+      // Comprobar si necesita Onboarding
+      if (!profile.onboarding_completed) {
+        openOnboarding(false);
+      }
+    }
+  } catch(e) {
+    console.error('Error cargando perfil del usuario:', e);
   }
+  
   loadDashboard();
 }
 
@@ -2442,6 +2643,80 @@ async function triggerProfilePasswordReset() {
     toast('📧 Enlace de restablecimiento enviado a tu bandeja de entrada.', 'success');
   } catch(e) {
     toast(e.message, 'error');
+  }
+}
+
+// ─── Onboarding Tour JS Handlers ──────────────────────────────────────
+let currentOnboardingSlide = 0;
+const totalOnboardingSlides = 5;
+
+function openOnboarding(forced = false) {
+  currentOnboardingSlide = 0;
+  for(let i=0; i<totalOnboardingSlides; i++) {
+    const slide = document.getElementById(`onboarding-slide-${i}`);
+    if (slide) {
+      slide.style.display = i === 0 ? 'block' : 'none';
+      slide.classList.toggle('active', i === 0);
+    }
+  }
+  
+  const closeBtn = document.querySelector('#modal-onboarding .modal-close');
+  if (closeBtn) {
+    closeBtn.style.display = forced ? 'block' : 'none';
+  }
+  
+  updateOnboardingNav();
+  openModal('modal-onboarding');
+}
+
+function closeOnboardingModal() {
+  closeModal('modal-onboarding');
+}
+
+function navOnboarding(direction) {
+  const nextSlide = currentOnboardingSlide + direction;
+  if (nextSlide >= 0 && nextSlide < totalOnboardingSlides) {
+    document.getElementById(`onboarding-slide-${currentOnboardingSlide}`).style.display = 'none';
+    const nextEl = document.getElementById(`onboarding-slide-${nextSlide}`);
+    nextEl.style.display = 'block';
+    
+    currentOnboardingSlide = nextSlide;
+    updateOnboardingNav();
+  }
+}
+
+function updateOnboardingNav() {
+  const prevBtn = document.getElementById('onboarding-prev-btn');
+  const nextBtn = document.getElementById('onboarding-next-btn');
+  const dots = document.getElementById('onboarding-dots').querySelectorAll('.onboarding-dot');
+  
+  prevBtn.style.visibility = currentOnboardingSlide === 0 ? 'hidden' : 'visible';
+  
+  if (currentOnboardingSlide === totalOnboardingSlides - 1) {
+    nextBtn.style.display = 'none';
+  } else {
+    nextBtn.style.display = 'block';
+    nextBtn.textContent = 'Siguiente';
+  }
+  
+  dots.forEach((dot, idx) => {
+    dot.classList.toggle('active', idx === currentOnboardingSlide);
+  });
+}
+
+async function completeOnboarding() {
+  closeModal('modal-onboarding');
+  
+  try {
+    if (state.user) {
+      state.user.onboarding_completed = true;
+      localStorage.setItem('arzor_user', JSON.stringify(state.user));
+    }
+    
+    await api('PATCH', '/platform/auth/me', { onboarding_completed: true });
+    toast('¡Guía completada! Bienvenido a Arzor AIs.', 'success');
+  } catch(e) {
+    console.error('Error al guardar estado de onboarding:', e);
   }
 }
 

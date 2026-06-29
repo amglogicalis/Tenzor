@@ -53,12 +53,15 @@ class ProfileResponse(BaseModel):
     avatar_url: Optional[str] = None
     plan: str
     created_at: datetime
+    onboarding_completed: bool = False
 
 
 class UpdateProfileRequest(BaseModel):
     display_name: Optional[str] = Field(None, max_length=100)
     bio: Optional[str] = Field(None, max_length=500)
     avatar_url: Optional[str] = None
+    onboarding_completed: Optional[bool] = None
+
 
 
 # ─── Agents ───────────────────────────────────────────────────────────────────

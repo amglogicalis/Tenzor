@@ -196,7 +196,7 @@ class PlatformAuthService:
         """Actualiza campos del perfil del usuario."""
         self._require_supabase()
 
-        allowed = {"display_name", "bio", "avatar_url"}
+        allowed = {"display_name", "bio", "avatar_url", "onboarding_completed"}
         update_data = {k: v for k, v in fields.items() if k in allowed and v is not None}
 
         if not update_data:
