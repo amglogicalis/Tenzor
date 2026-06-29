@@ -21,6 +21,9 @@ from typing import List, Dict, Any, Optional
 import requests
 from dotenv import load_dotenv
 import getpass
+import threading
+import time
+
 
 
 # Cargar variables de entorno de .env local si existe
@@ -102,6 +105,39 @@ def c(text: str, color: str) -> str:
     if not sys.stdout.isatty():
         return text
     return f"{COLORS.get(color, '')}{text}{COLORS['reset']}"
+
+class Spinner:
+    def __init__(self, message="Cargando"):
+        self.message = message
+        self.frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        self.stop_running = threading.Event()
+        self.thread = None
+
+    def _spin(self):
+        idx = 0
+        while not self.stop_running.is_set():
+            frame = self.frames[idx % len(self.frames)]
+            sys.stdout.write(f"\r  {COLORS['cyan']}{frame}{COLORS['reset']} {self.message}...")
+            sys.stdout.flush()
+            idx += 1
+            time.sleep(0.1)
+        # Limpiar la línea al salir
+        sys.stdout.write("\r" + " " * (len(self.message) + 15) + "\r")
+        sys.stdout.flush()
+
+    def __enter__(self):
+        if sys.stdout.isatty():
+            self.thread = threading.Thread(target=self._spin, daemon=True)
+            self.thread.start()
+        else:
+            sys.stdout.write(f"  {self.message}...\n")
+            sys.stdout.flush()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.thread:
+            self.stop_running.set()
+            self.thread.join(timeout=1.0)
 
 def header():
     print()
@@ -310,9 +346,10 @@ def cmd_login(base_url: str):
             print(c("  ✗ Error: La contraseña es obligatoria.", "red"))
             return
             
-        print(c("\n  🚀 Autenticando con el servidor...", "cyan"))
+        print()
         payload = {"email": email, "password": password}
-        result = api_post("/platform/auth/login", payload, base_url)
+        with Spinner("Autenticando credenciales con el servidor"):
+            result = api_post("/platform/auth/login", payload, base_url)
         
         token = result.get("access_token")
         if not token:
@@ -345,9 +382,10 @@ def cmd_list_agents(base_url: str):
         print(c("  ✗ Error: ARZOR_TOKEN no configurado.", "red"))
         return
         
-    print(c("  📋 Obteniendo tus agentes personalizados...", "cyan"))
+    print()
     try:
-        data = api_get("/platform/agents", base_url)
+        with Spinner("Obteniendo tus agentes personalizados"):
+            data = api_get("/platform/agents", base_url)
         agents = data.get("agents", [])
         if not agents:
             print(c("  No tienes agentes creados todavía.", "yellow"))
@@ -377,9 +415,10 @@ def cmd_list_models(base_url: str):
         print(c("  ✗ Error: ARZOR_TOKEN no configurado.", "red"))
         return
         
-    print(c("  🔍 Consultando modelos activos basados en tus API Keys...", "cyan"))
+    print()
     try:
-        models = api_get("/platform/keys/models/available", base_url)
+        with Spinner("Consultando modelos de tus proveedores (esto puede demorar unos segundos)"):
+            models = api_get("/platform/keys/models/available", base_url)
         if not models:
             print(c("  No hay modelos disponibles configurados en tu cuenta.", "yellow"))
             print(c("  Configura tus API Keys en el Panel Web de Arzor.", "gray"))
@@ -498,8 +537,9 @@ def cmd_create_agent_interactive(base_url: str):
             "preferred_model": preferred_model
         }
         
-        print(c("\n  🚀 Registrando nuevo agente en el servidor...", "cyan"))
-        result = api_post("/platform/agents", payload, base_url)
+        print()
+        with Spinner("Registrando nuevo agente en el servidor"):
+            result = api_post("/platform/agents", payload, base_url)
         print(c(f"  ✅ ¡Agente creado con éxito!", "green"))
         print(f"     Nombre: {c(result['name'], 'bold')}")
         print(f"     ID:     {c(result['id'], 'cyan')}")
@@ -532,8 +572,8 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
     # Resolver el agente por nombre si se proporcionó
     resolved_agent_id = ""
     if agent_id:
-        print(c("  🔍 Resolviendo agente...", "gray"))
-        resolved_agent_id = resolve_agent_id(agent_id, base_url)
+        with Spinner("Resolviendo agente"):
+            resolved_agent_id = resolve_agent_id(agent_id, base_url)
         if resolved_agent_id != agent_id:
             print(c(f"  ✔ Agente resuelto: {c(agent_id, 'bold')} ➔ {c(resolved_agent_id, 'cyan')}", "gray"))
         else:
@@ -555,10 +595,10 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
     
     while step_count < max_steps:
         step_count += 1
-        print(c(f"  [Paso {step_count}/{max_steps}] Pensando...", "gray"))
         
         try:
-            step_result = call_agent_step(messages, base_url, tier, resolved_agent_id)
+            with Spinner(f"[Paso {step_count}/{max_steps}] Pensando y analizando"):
+                step_result = call_agent_step(messages, base_url, tier, resolved_agent_id)
         except requests.exceptions.HTTPError as e:
             detail = "Error de conexión o validación."
             try:
