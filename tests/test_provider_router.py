@@ -653,3 +653,65 @@ class TestProviderRouter:
         assert ("google", "gemini-2.5-flash") in called_configs
         assert ("google", "gemini-2.0-flash-lite") in called_configs
         assert ("groq", "llama-3.1-8b-instant") in called_configs
+
+    def test_ollama_dispatch(self):
+        """Verifica que el ruteo de inferencia para Ollama procesa correctamente la URL base y el modelo."""
+        router = ProviderRouterService()
+        called_args = {}
+
+        def mock_call_openai_compatible(provider, base_url, messages, model, api_key, temperature, max_tokens, system_prompt):
+            called_args["provider"] = provider
+            called_args["base_url"] = base_url
+            called_args["model"] = model
+            called_args["api_key"] = api_key
+            return InferenceResult(
+                content="ok-ollama", provider=provider, model=model,
+                key_id="key-ollama-test", tokens_in=5, tokens_out=10, latency_ms=50.0
+            )
+
+        with patch("app.services.provider_router_service._call_openai_compatible", side_effect=mock_call_openai_compatible):
+            result = router._dispatch(
+                provider="ollama",
+                model="ollama/llama3:latest",
+                messages=[{"role": "user", "content": "Hola"}],
+                api_key="http://localhost:11434",
+                system_prompt="Test system",
+                temperature=0.7,
+                max_tokens=100
+            )
+
+        assert result.content == "ok-ollama"
+        assert called_args["provider"] == "ollama"
+        assert called_args["base_url"] == "http://localhost:11434/v1"
+        assert called_args["model"] == "llama3:latest"
+        assert called_args["api_key"] == "ollama"
+
+    def test_fetch_ollama_models_success(self):
+        """Verifica que _fetch_ollama_models realiza la llamada HTTP correcta y formatea los modelos."""
+        import asyncio
+        from app.routers.platform_keys import _fetch_ollama_models
+        
+        mock_response = {
+            "models": [
+                {"name": "llama3:latest"},
+                {"name": "qwen2.5:14b"}
+            ]
+        }
+        
+        class MockResponse:
+            def __init__(self, status_code, json_data):
+                self.status_code = status_code
+                self._json_data = json_data
+            def json(self):
+                return self._json_data
+
+        async def mock_get(url, *args, **kwargs):
+            return MockResponse(200, mock_response)
+
+        with patch("httpx.AsyncClient.get", side_effect=mock_get):
+            models = asyncio.run(_fetch_ollama_models("http://localhost:11434"))
+
+        assert len(models) == 2
+        assert models[0]["id"] == "ollama/llama3:latest"
+        assert models[0]["provider"] == "ollama"
+        assert models[1]["id"] == "ollama/qwen2.5:14b"

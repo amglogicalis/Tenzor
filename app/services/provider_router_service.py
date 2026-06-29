@@ -328,6 +328,7 @@ LIGHTWEIGHT_MODELS = {
     "novita": "meta-llama/llama-3.1-8b-instruct",
     "scaleway": "llama-3.1-8b-instruct",
     "watsonx": "ibm/granite-3-8b-instruct",
+    "ollama": "llama3:latest",
 }
 
 def _call_cohere(
@@ -1054,6 +1055,19 @@ class ProviderRouterService:
             return _call_watsonx(**kwargs)
         elif provider == "openrouter":
             return _call_openrouter(**kwargs)
+        elif provider == "ollama":
+            base_url = f"{api_key.rstrip('/')}/v1"
+            actual_model = model[7:] if model.startswith("ollama/") else model
+            return _call_openai_compatible(
+                provider=provider,
+                base_url=base_url,
+                messages=messages,
+                model=actual_model,
+                api_key="ollama",
+                temperature=temperature,
+                max_tokens=max_tokens,
+                system_prompt=system_prompt,
+            )
         elif provider in OPENAI_COMPATIBLE_PROVIDERS:
             base_url = OPENAI_COMPATIBLE_PROVIDERS[provider]
             return _call_openai_compatible(

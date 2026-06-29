@@ -477,6 +477,7 @@
     .provider-novita { background: rgba(250, 50, 100, 0.15); color: #fa3264; }
     .provider-scaleway { background: rgba(81, 0, 182, 0.15); color: #9c5cff; }
     .provider-watsonx { background: rgba(15, 98, 254, 0.15); color: #0f62fe; }
+    .provider-ollama { background: rgba(0, 180, 216, 0.15); color: #00b4d8; }
     .model-item-free-badge {
       font-size: 9px; font-weight: 700; color: #00f59c; border: 1px solid #00f59c;
       padding: 0 4px; border-radius: 3px; margin-left: 6px; text-transform: uppercase;
@@ -861,6 +862,7 @@
                 <option value="novita">Novita AI</option>
                 <option value="scaleway">Scaleway</option>
                 <option value="watsonx">IBM Watsonx</option>
+                <option value="ollama">Ollama Local (PC/Server)</option>
               </select>
             </div>
             <div class="form-group" style="margin:0">
@@ -872,6 +874,7 @@
               <input type="password" id="key-api-key" placeholder="AQ... o gsk_..." style="background:var(--bg-input)" />
               <div id="cloudflare-note" style="display:none; font-size:10px; color:var(--text-3); margin-top:4px">Para Cloudflare ingresa en formato ID_DE_CUENTA:API_TOKEN</div>
               <div id="watsonx-note" style="display:none; font-size:10px; color:var(--text-3); margin-top:4px">Para Watsonx ingresa en formato APIKEY:PROJECT_ID:REGION</div>
+              <div id="ollama-note" style="display:none; font-size:10px; color:var(--text-3); margin-top:4px">Introduce la URL de tu servidor Ollama (ej: <code>http://localhost:11434</code> o <code>http://127.0.0.1:11434</code>)</div>
             </div>
           </div>
           <div style="margin-top:16px; display:flex; justify-content:flex-end">
@@ -2071,10 +2074,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const providerSelect = document.getElementById('key-provider');
   const cfNote = document.getElementById('cloudflare-note');
   const wxNote = document.getElementById('watsonx-note');
+  const ollamaNote = document.getElementById('ollama-note');
+  const keyApiLabel = document.getElementById('key-api-label');
+  const keyApiKeyInput = document.getElementById('key-api-key');
+
   if (providerSelect) {
     providerSelect.addEventListener('change', () => {
       if (cfNote) cfNote.style.display = providerSelect.value === 'cloudflare' ? 'block' : 'none';
       if (wxNote) wxNote.style.display = providerSelect.value === 'watsonx' ? 'block' : 'none';
+      if (ollamaNote) ollamaNote.style.display = providerSelect.value === 'ollama' ? 'block' : 'none';
+      
+      if (providerSelect.value === 'ollama') {
+        if (keyApiLabel) keyApiLabel.innerText = 'Dirección / URL del Servidor';
+        if (keyApiKeyInput) {
+          keyApiKeyInput.type = 'text';
+          keyApiKeyInput.placeholder = 'http://localhost:11434';
+        }
+      } else {
+        if (keyApiLabel) keyApiLabel.innerText = 'Clave API';
+        if (keyApiKeyInput) {
+          keyApiKeyInput.type = 'password';
+          keyApiKeyInput.placeholder = 'AQ... o gsk_...';
+        }
+      }
     });
   }
 });

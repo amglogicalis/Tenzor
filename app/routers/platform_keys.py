@@ -140,8 +140,13 @@ SILICONFLOW_MODELS = [
     {"id": "deepseek-ai/DeepSeek-R1", "name": "DeepSeek R1 (SiliconFlow)", "provider": "siliconflow", "free": True},
 ]
 
+OLLAMA_MODELS = [
+    {"id": "ollama/llama3:latest", "name": "llama3:latest (Ollama Local)", "provider": "ollama", "free": True},
+    {"id": "ollama/qwen2.5:latest", "name": "qwen2.5:latest (Ollama Local)", "provider": "ollama", "free": True},
+]
+
 class AddKeyRequest(BaseModel):
-    provider: str = Field(..., pattern=r"^(google|groq|openrouter|xai|perplexity|deepseek|together|fireworks|mistral|sambanova|cerebras|siliconflow)$", description="Proveedor compatible")
+    provider: str = Field(..., pattern=r"^(google|groq|openrouter|xai|perplexity|deepseek|together|fireworks|mistral|sambanova|cerebras|siliconflow|zai|novita|scaleway|watsonx|cohere|anthropic|cloudflare|huggingface|ollama)$", description="Proveedor compatible")
     key_label: str = Field("", max_length=100, description="Etiqueta para identificar la clave")
     api_key: str = Field(..., min_length=5, description="La clave de API real")
 
@@ -336,6 +341,17 @@ async def list_available_models(
     # IBM Watsonx: Listado estático
     if "watsonx" in active_providers:
         models.extend(WATSONX_MODELS)
+
+    # Ollama Local: Listado dinámico
+    if "ollama" in active_providers:
+        ollama_url = user_keys_map.get("ollama")
+        ollama_models_dyn = []
+        if ollama_url:
+            ollama_models_dyn = await _fetch_ollama_models(ollama_url)
+        if ollama_models_dyn:
+            models.extend(ollama_models_dyn)
+        else:
+            models.extend(OLLAMA_MODELS)
 
     return models
 
@@ -748,6 +764,30 @@ async def _fetch_openrouter_models() -> List[Dict[str, Any]]:
     
     # En caso de error, retornar del caché si existe, o lista vacía
     return _openrouter_models_cache["data"]
+
+
+async def _fetch_ollama_models(base_url: str) -> List[Dict[str, Any]]:
+    """Consulta de forma dinámica el listado de modelos locales descargados en Ollama."""
+    try:
+        url = f"{base_url.rstrip('/')}/api/tags"
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json().get("models", [])
+                models = []
+                for m in data:
+                    name = m.get("name")
+                    if name:
+                        models.append({
+                            "id": f"ollama/{name}",
+                            "name": f"{name} (Ollama Local)",
+                            "provider": "ollama",
+                            "free": True
+                        })
+                return models
+    except Exception as e:
+        logger.warning(f"Ollama local no disponible en {base_url}: {e}")
+    return []
 
 
 @router.get("/debug/gemini-test", summary="Endpoint de diagnóstico para error 403 de Gemini en producción")
