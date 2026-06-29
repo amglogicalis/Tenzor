@@ -117,3 +117,16 @@ def test_save_token_to_env_mocked():
         written_lines = mock_file.writelines.call_args[0][0]
         assert 'ARZOR_TOKEN="super_new_token"\n' in written_lines
 
+def test_is_coding_model_filter():
+    from cli.arzor import is_coding_model
+    # 1. Aceptados (whitelist o palabras clave)
+    assert is_coding_model("gemini-2.0-flash", "google") is True
+    assert is_coding_model("claude-3-5-sonnet-20241022", "anthropic") is True
+    assert is_coding_model("qwen-2.5-coder-7b", "openrouter") is True
+    assert is_coding_model("llama-3.3-70b-instruct", "watsonx") is True
+    
+    # 2. Filtrados (conversacionales pequeños sin instruct ni coder)
+    assert is_coding_model("llama-3-8b", "watsonx") is False
+    assert is_coding_model("gemma-2b", "groq") is False
+
+

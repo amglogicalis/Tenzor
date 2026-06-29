@@ -29,6 +29,62 @@ load_dotenv()
 DEFAULT_URL = os.getenv("ARZOR_URL", "http://localhost:8000")
 TOKEN = os.getenv("ARZOR_TOKEN", "")
 
+CODING_MODELS_WHITELIST = {
+    # Google Gemini
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    
+    # Groq
+    "llama-3.3-70b-versatile",
+    
+    # DeepSeek
+    "deepseek-chat",
+    "deepseek-reasoner",
+    
+    # Mistral
+    "codestral-latest",
+    "mistral-large-latest",
+    
+    # Cerebras
+    "llama3.1-70b",
+    
+    # SambaNova
+    "DeepSeek-V3",
+    "Meta-Llama-3.1-70B-Instruct",
+    
+    # SiliconFlow
+    "deepseek-ai/DeepSeek-V3",
+    "deepseek-ai/DeepSeek-R1",
+    
+    # Anthropic
+    "claude-3-5-sonnet-20241022",
+    
+    # Cohere
+    "command-r-plus",
+    
+    # Ollama
+    "ollama/qwen2.5:latest",
+    "ollama/llama3:latest",
+}
+
+def is_coding_model(model_id: str, provider: str) -> bool:
+    """Evalúa si un modelo es de primer nivel para desarrollo, programación e informática."""
+    m_id = model_id.strip().lower()
+    
+    # 1. Coincidencia exacta en la whitelist (insensible a mayúsculas)
+    if model_id in CODING_MODELS_WHITELIST or m_id in CODING_MODELS_WHITELIST:
+        return True
+        
+    # 2. Filtrado dinámico por términos clave (para OpenRouter u otros proveedores)
+    keywords = ["coder", "coding", "reasoning", "r1", "v3", "instruct", "codestral"]
+    if any(k in m_id for k in keywords):
+        return True
+        
+    return False
+
+
 COLORS = {
     "reset": "\033[0m",
     "bold": "\033[1m",
@@ -330,9 +386,17 @@ def cmd_list_models(base_url: str):
             print()
             return
             
+        # Filtrar modelos de codificación
+        coding_models = [m for m in models if is_coding_model(m.get("id", ""), m.get("provider", ""))]
+        if not coding_models:
+            print(c("  No hay modelos de programación/desarrollo disponibles con tus API Keys configuradas.", "yellow"))
+            print(c("  Configura claves para Google, Groq, DeepSeek, Anthropic o Mistral en el Panel Web.", "gray"))
+            print()
+            return
+            
         # Agrupar por proveedor
         grouped = {}
-        for m in models:
+        for m in coding_models:
             prov = m.get("provider", "Otros").upper()
             if prov not in grouped:
                 grouped[prov] = []
