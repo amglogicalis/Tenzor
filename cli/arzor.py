@@ -981,6 +981,46 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
         action = step_result.get("action", "")
         args = step_result.get("args", {})
         
+        # Fallback de seguridad en el cliente: si el backend falló al parsear y devolvió el JSON crudo en el mensaje
+        if (not action or action == "finish") and args.get("message"):
+            raw_msg = args["message"].strip()
+            try:
+                import re
+                cleaned = raw_msg
+                cleaned = re.sub(r'^```(?:json)?', '', cleaned)
+                cleaned = re.sub(r'```$', '', cleaned).strip()
+                
+                start_idx = cleaned.find('{')
+                end_idx = cleaned.rfind('}')
+                if start_idx != -1 and end_idx != -1:
+                    cleaned = cleaned[start_idx:end_idx+1]
+                    
+                # Sanitizar saltos de línea crudos
+                sanitized = []
+                in_string = False
+                escape = False
+                for char in cleaned:
+                    if char == '"' and not escape:
+                        in_string = not in_string
+                    if char == '\\' and in_string:
+                        escape = not escape
+                    else:
+                        escape = False
+                        
+                    if in_string and char in ('\n', '\r'):
+                        sanitized.append('\\n')
+                    else:
+                        sanitized.append(char)
+                cleaned_json = "".join(sanitized)
+                
+                parsed_data = json.loads(cleaned_json)
+                if "action" in parsed_data and parsed_data["action"] != "finish":
+                    thought = parsed_data.get("thought", thought)
+                    action = parsed_data["action"]
+                    args = parsed_data.get("args", {})
+            except Exception:
+                pass
+        
         assistant_msg = {
             "role": "assistant",
             "content": json.dumps({"thought": thought, "action": action, "args": args})

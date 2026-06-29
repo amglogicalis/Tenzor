@@ -338,14 +338,21 @@ class DevCrewService:
         """Carga las instrucciones del agente AFT desde Supabase."""
         if not self._sb:
             return None
+        import uuid
+        is_uuid = False
         try:
-            resp = (
-                self._sb.table("custom_agents")
-                .select("name, current_version_id")
-                .eq("id", agent_id)
-                .is_("deleted_at", "null")
-                .execute()
-            )
+            uuid.UUID(agent_id)
+            is_uuid = True
+        except ValueError:
+            pass
+            
+        try:
+            query = self._sb.table("custom_agents").select("name, current_version_id").is_("deleted_at", "null")
+            if is_uuid:
+                resp = query.eq("id", agent_id).execute()
+            else:
+                resp = query.eq("name", agent_id).execute()
+                
             if not resp.data:
                 return None
             agent = resp.data[0]
@@ -364,7 +371,7 @@ class DevCrewService:
 
     def _parse_json_response(self, content: str) -> dict:
         """
-        Extrae y parsea el JSON de la respuesta del LLM.
+        Extrae y parsea el JSON de la respuesta del LLM de forma extremadamente robusta.
         """
         import json
         import re
@@ -380,9 +387,29 @@ class DevCrewService:
         if start != -1 and end != -1:
             cleaned = cleaned[start:end+1]
             
+        # Sanitizar saltos de línea literales dentro de strings de comillas
+        sanitized = []
+        in_string = False
+        escape = False
+        for char in cleaned:
+            if char == '"' and not escape:
+                in_string = not in_string
+            if char == '\\' and in_string:
+                escape = not escape
+            else:
+                escape = False
+                
+            if in_string and char in ('\n', '\r'):
+                # Reemplazar salto de línea crudo por la secuencia de escape de salto de línea \n
+                sanitized.append('\\n')
+            else:
+                sanitized.append(char)
+                
+        cleaned_json = "".join(sanitized)
+        
         try:
-            return json.loads(cleaned)
-        except json.JSONDecodeError:
-            # Si el LLM no respetó el formato JSON, devolver en crudo
-            logger.warning("DevCrewService: respuesta no es JSON válido, devolviendo raw.")
+            return json.loads(cleaned_json)
+        except json.JSONDecodeError as e:
+            logger.warning(f"DevCrewService: respuesta no es JSON válido tras sanitización: {e}")
             return {"raw_response": content, "error": "El LLM no respetó el formato JSON."}
+
