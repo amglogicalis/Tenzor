@@ -995,6 +995,10 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 if start_idx != -1 and end_idx != -1:
                     cleaned = cleaned[start_idx:end_idx+1]
                     
+                # Si el modelo duplicó las llaves ({{ ... }}), limpiar las externas sobrantes
+                if cleaned.startswith("{{") and cleaned.endswith("}}"):
+                    cleaned = cleaned[1:-1]
+                    
                 # Sanitizar saltos de línea crudos
                 sanitized = []
                 in_string = False

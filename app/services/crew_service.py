@@ -120,10 +120,10 @@ Reglas críticas de comportamiento:
 5. Cuando la tarea esté totalmente finalizada y verificada, responde con action = "finish".
 
 Debes responder ÚNICAMENTE en el siguiente formato JSON, sin añadir texto libre antes ni después:
-{{
+{
   "thought": "Tu razonamiento paso a paso sobre el estado actual y lo que planeas hacer a continuación.",
   "action": "list_directory | read_file_content | write_file_content | edit_file_content | execute_system_command | finish",
-  "args": {{
+  "args": {
     // Si la acción es list_directory:
     //   "path": "ruta/al/directorio" (opcional, por defecto ".")
     // Si la acción es read_file_content:
@@ -136,8 +136,8 @@ Debes responder ÚNICAMENTE en el siguiente formato JSON, sin añadir texto libr
     //   "command": "comando de consola a ejecutar"
     // Si la acción es finish:
     //   "message": "Resumen final detallado del trabajo realizado"
-  }}
-}}
+  }
+}
 """
 
 
@@ -386,6 +386,10 @@ class DevCrewService:
         end = cleaned.rfind('}')
         if start != -1 and end != -1:
             cleaned = cleaned[start:end+1]
+            
+        # Si el modelo duplicó las llaves ({{ ... }}), limpiar las externas sobrantes
+        if cleaned.startswith("{{") and cleaned.endswith("}}"):
+            cleaned = cleaned[1:-1]
             
         # Sanitizar saltos de línea literales dentro de strings de comillas
         sanitized = []
