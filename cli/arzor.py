@@ -38,8 +38,10 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
     except Exception:
         pass
 
-# Cargar variables de entorno de .env local si existe
-load_dotenv()
+# Cargar variables de entorno del archivo .env del repositorio base de Arzor
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_DIR = os.path.dirname(SCRIPT_DIR)
+load_dotenv(os.path.join(REPO_DIR, ".env"), override=True)
 
 DEFAULT_URL = os.getenv("ARZOR_URL", "http://localhost:8000")
 TOKEN = os.getenv("ARZOR_TOKEN", "")
@@ -322,8 +324,10 @@ def resolve_agent_id(agent_name_or_id: str, base_url: str) -> str:
         return agent_name_or_id
 
 def save_token_to_env(token: str):
-    """Guarda o actualiza la variable ARZOR_TOKEN en el archivo .env del directorio actual."""
-    env_path = ".env"
+    """Guarda o actualiza la variable ARZOR_TOKEN en el archivo .env del repositorio base."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(script_dir)
+    env_path = os.path.join(repo_dir, ".env")
     lines = []
     token_inserted = False
     
