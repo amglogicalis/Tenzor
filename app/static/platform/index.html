@@ -1692,17 +1692,44 @@ function showDebateResult(result) {
     }
   });
 
-  let html = '';
+  const turnsContainer = document.getElementById('debate-turns');
+  const synthesisContainer = document.getElementById('synthesis-content');
+  const synthesisBox = document.querySelector('.synthesis-box');
+  
+  turnsContainer.innerHTML = '';
+  synthesisContainer.innerHTML = '';
+  if (synthesisBox) {
+    synthesisBox.style.display = 'none';
+  }
+
+  let turnIndex = 0;
   let currentRound = null;
 
-  turns.forEach(t => {
+  function renderNextTurn() {
+    if (turnIndex >= turns.length) {
+      // Mostrar la síntesis final del moderador con transición suave
+      if (synthesisBox) {
+        synthesisBox.style.display = 'block';
+        synthesisBox.style.opacity = 0;
+        synthesisBox.style.transition = 'opacity 0.6s ease';
+        setTimeout(() => { synthesisBox.style.opacity = 1; }, 50);
+      }
+      synthesisContainer.innerHTML = esc(result.synthesis || '').replace(/\n/g, '<br/>');
+      setTimeout(() => {
+        document.getElementById('debate-result').scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 100);
+      return;
+    }
+
+    const t = turns[turnIndex];
     const config = agentMap[t.agent_name] || { icon: '🤖', style: colors[0], align: 'left' };
-    
+    let html = '';
+
     // Si cambia de ronda, insertar divisor estético de ronda
     if (t.round !== currentRound) {
       currentRound = t.round;
       html += `
-        <div style="text-align:center;margin:32px 0 20px 0;position:relative;width:100%">
+        <div style="text-align:center;margin:32px 0 20px 0;position:relative;width:100%;opacity:0;transition:opacity 0.4s ease" class="round-separator">
           <div style="position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--border);z-index:1"></div>
           <span style="position:relative;z-index:2;background:var(--bg-card);padding:6px 18px;font-size:11px;font-weight:800;color:var(--primary);border:1px solid var(--border);border-radius:20px;text-transform:uppercase;letter-spacing:1.5px">⚡ Ronda ${currentRound}</span>
         </div>
@@ -1710,8 +1737,11 @@ function showDebateResult(result) {
     }
 
     const isLeft = config.align === 'left';
+    const bubbleId = `bubble-${turnIndex}`;
+    
+    // Burbuja inicial con indicador de escritura
     html += `
-      <div style="display:flex;justify-content:${isLeft ? 'flex-start' : 'flex-end'};margin-bottom:16px;width:100%">
+      <div style="display:flex;justify-content:${isLeft ? 'flex-start' : 'flex-end'};margin-bottom:16px;width:100%;opacity:0;transition:opacity 0.4s ease" id="${bubbleId}">
         <div style="display:flex;flex-direction:${isLeft ? 'row' : 'row-reverse'};gap:12px;max-width:85%;align-items:flex-start">
           <div style="width:36px;height:36px;border-radius:50%;background:${config.style.border};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;box-shadow:0 2px 4px rgba(0,0,0,0.05)">
             ${config.icon}
@@ -1721,16 +1751,59 @@ function showDebateResult(result) {
               <span style="font-weight:700;color:var(--text-1)">${esc(t.agent_name)}</span>
               <span style="color:var(--text-3);font-size:10px">${t.provider} · ${t.model}</span>
             </div>
-            <div style="font-size:13px;line-height:1.6;color:var(--text-2);white-space:pre-wrap">${esc(t.content)}</div>
+            <div style="font-size:13px;line-height:1.6;color:var(--text-2);white-space:pre-wrap" class="bubble-content">
+              <div class="typing-indicator" style="display:flex;gap:4px;padding:6px 0">
+                <span style="width:6px;height:6px;background:var(--text-3);border-radius:50%;animation:typing 1s infinite alternate"></span>
+                <span style="width:6px;height:6px;background:var(--text-3);border-radius:50%;animation:typing 1s infinite alternate;animation-delay:0.2s"></span>
+                <span style="width:6px;height:6px;background:var(--text-3);border-radius:50%;animation:typing 1s infinite alternate;animation-delay:0.4s"></span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     `;
-  });
 
-  document.getElementById('debate-turns').innerHTML = html;
-  document.getElementById('synthesis-content').innerHTML = esc(result.synthesis || '').replace(/\n/g,'<br/>');
-  document.getElementById('debate-result').scrollIntoView({ behavior: 'smooth' });
+    turnsContainer.insertAdjacentHTML('beforeend', html);
+    
+    // Activar opacidad del separador si existe
+    const separatorEl = turnsContainer.querySelector('.round-separator:last-of-type');
+    if (separatorEl) {
+      setTimeout(() => { separatorEl.style.opacity = 1; }, 50);
+    }
+    
+    // Activar opacidad del mensaje
+    const bubbleEl = document.getElementById(bubbleId);
+    setTimeout(() => { 
+      bubbleEl.style.opacity = 1;
+      bubbleEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
+
+    // Simular escritura por 1.2s y luego volcar la respuesta real
+    setTimeout(() => {
+      const contentEl = bubbleEl.querySelector('.bubble-content');
+      if (contentEl) {
+        contentEl.innerHTML = esc(t.content).replace(/\n/g, '<br/>');
+        bubbleEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+      turnIndex++;
+      setTimeout(renderNextTurn, 500); // Pequeña pausa antes de escribir el siguiente
+    }, 1200);
+  }
+
+  // Estilos CSS dinámicos de animación para el typing indicator si no existen
+  if (!document.getElementById('typing-style')) {
+    const style = document.createElement('style');
+    style.id = 'typing-style';
+    style.innerHTML = `
+      @keyframes typing {
+        0% { transform: translateY(0); opacity: 0.3; }
+        100% { transform: translateY(-4px); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  renderNextTurn();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
