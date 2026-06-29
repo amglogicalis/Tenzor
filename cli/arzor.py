@@ -91,7 +91,6 @@ def read_file_content(path: str) -> str:
 def write_file_content(path: str, content: str) -> str:
     """Escribe o crea un archivo local con el contenido dado."""
     try:
-        # Asegurar directorios padres
         dir_name = os.path.dirname(path)
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
@@ -114,7 +113,6 @@ def edit_file_content(path: str, target_text: str, replacement_text: str) -> str
         if target_text not in content:
             return f"Error: No se encontró la coincidencia exacta de 'target_text' en el archivo '{path}'."
             
-        # Reemplazar solo una ocurrencia para evitar errores masivos no deseados
         new_content = content.replace(target_text, replacement_text, 1)
         
         with open(path, "w", encoding="utf-8") as f:
@@ -126,7 +124,6 @@ def edit_file_content(path: str, target_text: str, replacement_text: str) -> str
 def execute_system_command(command: str) -> str:
     """Ejecuta un comando de consola del sistema operativo y devuelve stdout/stderr."""
     try:
-        # Ejecutar en shell
         result = subprocess.run(
             command,
             shell=True,
@@ -149,24 +146,221 @@ def execute_system_command(command: str) -> str:
     except Exception as e:
         return f"Error al ejecutar comando: {str(e)}"
 
-# ─── API Client & ReAct Loop ──────────────────────────────────────────────────
+# ─── API Client Helpers ───────────────────────────────────────────────────────
+
+def _headers() -> Dict[str, str]:
+    headers = {}
+    if TOKEN:
+        headers["Authorization"] = f"Bearer {TOKEN}"
+    return headers
+
+def api_get(path: str, base_url: str) -> Any:
+    url = f"{base_url}{path}"
+    resp = requests.get(url, headers=_headers(), timeout=45)
+    resp.raise_for_status()
+    return resp.json()
+
+def api_post(path: str, payload: dict, base_url: str) -> Any:
+    url = f"{base_url}{path}"
+    headers = _headers()
+    headers["Content-Type"] = "application/json"
+    resp = requests.post(url, json=payload, headers=headers, timeout=60)
+    resp.raise_for_status()
+    return resp.json()
+
+def resolve_agent_id(agent_name_or_id: str, base_url: str) -> str:
+    """Intenta buscar un agente por nombre en la cuenta del usuario para resolver su UUID."""
+    if not agent_name_or_id:
+        return ""
+    try:
+        data = api_get("/platform/agents", base_url)
+        agents = data.get("agents", [])
+        for agent in agents:
+            # Coincidencia exacta por ID
+            if agent["id"] == agent_name_or_id:
+                return agent["id"]
+            # Coincidencia por nombre (ignora mayúsculas/minúsculas)
+            if agent["name"].strip().lower() == agent_name_or_id.strip().lower():
+                return agent["id"]
+        return agent_name_or_id  # Fallback a devolver el mismo string (podría ser un UUID directo)
+    except Exception:
+        return agent_name_or_id
+
+# ─── Comandos CLI Expandidos ──────────────────────────────────────────────────
+
+def cmd_list_agents(base_url: str):
+    """Muestra la lista de agentes del usuario en consola."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado.", "red"))
+        return
+        
+    print(c("  📋 Obteniendo tus agentes personalizados...", "cyan"))
+    try:
+        data = api_get("/platform/agents", base_url)
+        agents = data.get("agents", [])
+        if not agents:
+            print(c("  No tienes agentes creados todavía.", "yellow"))
+            print(c("  Crea uno interactivamente con: python cli/arzor.py create-agent", "gray"))
+            print()
+            return
+            
+        print()
+        for idx, agent in enumerate(agents, start=1):
+            category_icon = {"dev": "💻", "ops": "⚙️", "data": "📊", "science": "🔬", "creative": "🎨"}.get(agent.get("category", ""), "🤖")
+            agent_id = agent["id"]
+            print(f"  {idx}. {category_icon}  {c(agent['name'], 'bold')} {c(f'[{agent_id}]', 'gray')}")
+            print(f"     Descripción:  {agent.get('description') or 'Sin descripción.'}")
+            print(f"     Categoría:    {c(agent.get('category','custom').upper(), 'cyan')}  |  Tier: {c(agent.get('base_tier','balanced').upper(), 'yellow')}")
+            provider = agent.get("preferred_provider") or "Por defecto del sistema"
+            model = agent.get("preferred_model") or "Por defecto del sistema"
+            print(f"     Config IA:    {c(provider, 'purple')} / {c(model, 'gray')}")
+            print()
+    except Exception as e:
+        print(c(f"  ✗ Error al obtener agentes: {e}", "red"))
+        print()
+
+def cmd_list_models(base_url: str):
+    """Muestra los modelos disponibles en base a tus API keys activas."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado.", "red"))
+        return
+        
+    print(c("  🔍 Consultando modelos activos basados en tus API Keys...", "cyan"))
+    try:
+        models = api_get("/platform/keys/models/available", base_url)
+        if not models:
+            print(c("  No hay modelos disponibles configurados en tu cuenta.", "yellow"))
+            print(c("  Configura tus API Keys en el Panel Web de Arzor.", "gray"))
+            print()
+            return
+            
+        # Agrupar por proveedor
+        grouped = {}
+        for m in models:
+            prov = m.get("provider", "Otros").upper()
+            if prov not in grouped:
+                grouped[prov] = []
+            grouped[prov].append(m)
+            
+        print()
+        for provider, items in sorted(grouped.items()):
+            print(f"  🌐 Proveedor: {c(provider, 'bold')}")
+            for item in items:
+                free_badge = c("(Gratuito)", "green") if item.get("free") else c("(Pago)", "yellow")
+                print(f"    • ID: {c(item['id'], 'cyan'):<45} {item['name']:<40} {free_badge}")
+            print()
+    except Exception as e:
+        print(c(f"  ✗ Error al listar modelos: {e}", "red"))
+        print()
+
+def cmd_create_agent_interactive(base_url: str):
+    """Guía interactiva paso a paso para crear un agente desde la consola."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado.", "red"))
+        return
+        
+    print(c("  ✨ Creación interactiva de nuevo Agente Personalizado ✨", "cyan"))
+    print(c("  Responde a los siguientes pasos (Presiona Ctrl+C para cancelar):\n", "gray"))
+    
+    try:
+        # 1. Nombre
+        name = ""
+        while len(name.strip()) < 2:
+            name = input(c("  [1/7] Nombre del Agente (mínimo 2 letras): ", "bold")).strip()
+            
+        # 2. Descripción
+        description = input(c("  [2/7] Descripción / Rol del Agente: ", "bold")).strip()
+        
+        # 3. Categoría
+        categories = ["dev", "ops", "data", "science", "creative", "custom"]
+        print(c("\n  Categorías válidas:", "gray"))
+        for i, cat in enumerate(categories, start=1):
+            print(f"    {i}. {cat}")
+        cat_idx = 0
+        while cat_idx < 1 or cat_idx > len(categories):
+            try:
+                cat_input = input(c("  [3/7] Selecciona el número de la categoría [default: 1]: ", "bold")).strip()
+                if not cat_input:
+                    cat_idx = 1
+                else:
+                    cat_idx = int(cat_input)
+            except ValueError:
+                pass
+        category = categories[cat_idx - 1]
+        
+        # 4. Tier
+        tiers = ["balanced", "pro", "fast"]
+        print(c("\n  Tiers de Calidad / Velocidad:", "gray"))
+        for i, t in enumerate(tiers, start=1):
+            print(f"    {i}. {t}")
+        tier_idx = 0
+        while tier_idx < 1 or tier_idx > len(tiers):
+            try:
+                tier_input = input(c("  [4/7] Selecciona el número de Tier [default: 1]: ", "bold")).strip()
+                if not tier_input:
+                    tier_idx = 1
+                else:
+                    tier_idx = int(tier_input)
+            except ValueError:
+                pass
+        base_tier = tiers[tier_idx - 1]
+        
+        # 5. Proveedor
+        print(c("\n  Proveedores soportados (google, groq, openrouter, deepseek, cohere, etc.):", "gray"))
+        preferred_provider = input(c("  [5/7] Proveedor preferido (Opcional, Enter para omitir): ", "bold")).strip().lower()
+        if not preferred_provider:
+            preferred_provider = None
+            
+        # 6. Modelo
+        preferred_model = input(c("  [6/7] Modelo preferido (Opcional, Enter para omitir): ", "bold")).strip()
+        if not preferred_model:
+            preferred_model = None
+            
+        # 7. Instrucciones
+        print(c("\n  Escribe las instrucciones de comportamiento (personality/reglas) para el agente.", "gray"))
+        print(c("  (Ingresa una sola línea o pulsa enter si es corta. Mínimo 20 caracteres)", "gray"))
+        system_instructions = ""
+        while len(system_instructions.strip()) < 20:
+            system_instructions = input(c("  [7/7] Instrucciones del sistema: ", "bold")).strip()
+            if len(system_instructions.strip()) < 20:
+                print(c("  ✗ Las instrucciones deben tener al menos 20 caracteres.", "yellow"))
+                
+        # Crear payload
+        payload = {
+            "name": name,
+            "description": description or None,
+            "category": category,
+            "base_tier": base_tier,
+            "system_instructions": system_instructions,
+            "is_public": False,
+            "preferred_provider": preferred_provider,
+            "preferred_model": preferred_model
+        }
+        
+        print(c("\n  🚀 Registrando nuevo agente en el servidor...", "cyan"))
+        result = api_post("/platform/agents", payload, base_url)
+        print(c(f"  ✅ ¡Agente creado con éxito!", "green"))
+        print(f"     Nombre: {c(result['name'], 'bold')}")
+        print(f"     ID:     {c(result['id'], 'cyan')}")
+        print()
+        
+    except KeyboardInterrupt:
+        print(c("\n\n  ✗ Creación cancelada por el usuario.", "red"))
+        print()
+
+# ─── ReAct Loop ───────────────────────────────────────────────────────────────
 
 def call_agent_step(messages: List[Dict[str, str]], base_url: str, tier: str, agent_id: str = "") -> dict:
     """Llama al backend de Arzor para obtener el siguiente paso del agente ReAct."""
-    url = f"{base_url}/platform/crew/agent-step"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {TOKEN}"
-    }
     payload = {
         "messages": messages,
         "tier": tier,
         "agent_id": agent_id or None
     }
-    
-    resp = requests.post(url, json=payload, headers=headers, timeout=120)
-    resp.raise_for_status()
-    return resp.json()
+    return api_post("/platform/crew/agent-step", payload, base_url)
 
 def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base_url: str):
     """Ejecuta el bucle ReAct del agente autónomo local."""
@@ -177,13 +371,23 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
         print(c("    Regístrate o inicia sesión en la plataforma y configúrala en tu entorno o en el archivo .env", "gray"))
         sys.exit(1)
 
+    # Resolver el agente por nombre si se proporcionó
+    resolved_agent_id = ""
+    if agent_id:
+        print(c("  🔍 Resolviendo agente...", "gray"))
+        resolved_agent_id = resolve_agent_id(agent_id, base_url)
+        if resolved_agent_id != agent_id:
+            print(c(f"  ✔ Agente resuelto: {c(agent_id, 'bold')} ➔ {c(resolved_agent_id, 'cyan')}", "gray"))
+        else:
+            print(c(f"  • Usando identificador/UUID directo: {c(agent_id, 'cyan')}", "gray"))
+        print()
+
     print(c("  🚀 Iniciando agente autónomo local...", "cyan"))
     print(c(f"  Tarea: {task}", "white"))
     print(c(f"  Tier:  {tier}  |  Modo Auto-Confirmar: {'SÍ' if auto_confirm else 'NO'}", "gray"))
     print(c(f"  URL del Servidor: {base_url}", "gray"))
     print()
 
-    # Inicializar el historial de conversación ReAct
     messages = [
         {"role": "user", "content": task}
     ]
@@ -196,8 +400,7 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
         print(c(f"  [Paso {step_count}/{max_steps}] Pensando...", "gray"))
         
         try:
-            # Obtener el siguiente paso (pensamiento + acción) del LLM
-            step_result = call_agent_step(messages, base_url, tier, agent_id)
+            step_result = call_agent_step(messages, base_url, tier, resolved_agent_id)
         except requests.exceptions.HTTPError as e:
             detail = "Error de conexión o validación."
             try:
@@ -214,14 +417,12 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
         action = step_result.get("action", "")
         args = step_result.get("args", {})
         
-        # Guardar la respuesta del asistente en el historial para mantener la consistencia
         assistant_msg = {
             "role": "assistant",
             "content": json.dumps({"thought": thought, "action": action, "args": args})
         }
         messages.append(assistant_msg)
         
-        # Mostrar el razonamiento de la IA
         if thought:
             print(c("\n  🧠 Pensamiento:", "cyan"))
             print(textwrap.indent(thought, "     "))
@@ -235,19 +436,16 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
             print()
             break
             
-        # Procesar herramientas
         print(c("  🛠️  Acción solicitada:", "yellow"))
         print(f"     Herramienta: {c(action, 'bold')}")
         print(f"     Argumentos:  {json.dumps(args)}")
         print()
         
-        # Solicitar aprobación si no está en modo automático
         if not auto_confirm:
             try:
                 confirm = input(c("     ¿Deseas permitir esta acción? [Y/n]: ", "bold")).strip().lower()
                 if confirm not in ("", "y", "yes", "s", "si"):
                     print(c("\n  ✗ Ejecución cancelada por el usuario.", "red"))
-                    # Enviar observación de cancelación a la IA para que pueda razonar qué hacer
                     messages.append({
                         "role": "user",
                         "content": "Acción rechazada por el usuario. Corrige tu enfoque o finaliza la tarea."
@@ -257,7 +455,6 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 print(c("\n  ✗ Interrumpido por el usuario.", "red"))
                 sys.exit(0)
                 
-        # Ejecutar la herramienta local
         observation = ""
         if action == "list_directory":
             observation = list_directory(args.get("path", "."))
@@ -272,13 +469,11 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
         else:
             observation = f"Error: La herramienta '{action}' no está soportada."
             
-        # Imprimir resultado de la observación en consola para el desarrollador
         print(c("  👁️  Observación (Resultado):", "gray"))
         truncated_obs = observation[:500] + "..." if len(observation) > 500 else observation
         print(textwrap.indent(truncated_obs, "     "))
         print()
         
-        # Añadir observación al historial del agente
         messages.append({
             "role": "user",
             "content": f"Resultado de la herramienta:\n{observation}"
@@ -291,44 +486,70 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
 # ─── CLI Entry Point ──────────────────────────────────────────────────────────
 
 def main():
+    # Comprobar si se llama a un comando especial o a una tarea directa
+    special_commands = {"list-agents", "create-agent", "list-models"}
+    
+    # Manejar compatibilidad ergonómica directa
+    is_special = len(sys.argv) > 1 and sys.argv[1] in special_commands
+    
     parser = argparse.ArgumentParser(
         prog="arzor",
         description="Agente CLI de Desarrollo Autónomo de Arzor AIs (el 'antigravity/codex' local)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
-        Ejemplos de uso:
-          python cli/arzor.py "Crea un servidor Flask básico en un archivo llamado app.py"
-          python cli/arzor.py "Escribe un script de python que ordene una lista de números" --tier pro
-          python cli/arzor.py "Ejecuta los tests unitarios con pytest y corrige los fallos si los hay" -y
+        Comandos de Administración:
+          python cli/arzor.py list-agents    → Lista todos tus agentes personalizados
+          python cli/arzor.py create-agent   → Asistente por pasos para crear un agente
+          python cli/arzor.py list-models    → Muestra todos tus modelos de IA activos
           
-        Variables de entorno soportadas:
-          ARZOR_TOKEN   → Token de autenticación de sesión de la plataforma
-          ARZOR_URL     → URL base del servidor (default: http://localhost:8000)
+        Ejemplos de ejecución de tareas:
+          python cli/arzor.py "Crea un servidor Flask en app.py"
+          python cli/arzor.py "Ejecuta los tests unitarios" -y --agent "Dev Python"
         """)
     )
-    parser.add_argument("task", nargs="*", help="Descripción de la tarea de desarrollo a realizar")
-    parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
-    parser.add_argument("--tier", default="balanced", choices=["fast", "balanced", "pro"],
-                        help="Tier de calidad del modelo a utilizar (default: balanced)")
-    parser.add_argument("-y", "--yes", action="store_true", dest="auto_confirm",
-                        help="Modo automático: ejecuta acciones de herramientas sin pedir confirmación")
-    parser.add_argument("--agent", default="", help="UUID de un agente especializado de tu panel de Arzor")
+    
+    if is_special:
+        # Definir subparsers para comandos especiales si se invoca uno
+        subparsers = parser.add_subparsers(dest="command", required=True)
+        subparsers.add_parser("list-agents", help="Listar tus agentes personalizados en la plataforma")
+        subparsers.add_parser("create-agent", help="Iniciar asistente interactivo de creación de agentes")
+        subparsers.add_parser("list-models", help="Listar todos los modelos de IA activos en tu cuenta")
+        
+        # Argumentos compartidos globales de conexión
+        parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
+        args = parser.parse_args()
+        
+        if args.command == "list-agents":
+            cmd_list_agents(args.url)
+        elif args.command == "list-models":
+            cmd_list_models(args.url)
+        elif args.command == "create-agent":
+            cmd_create_agent_interactive(args.url)
+            
+    else:
+        # Comportamiento por defecto: Ejecutar una tarea autónoma ReAct
+        parser.add_argument("task", nargs="*", help="Descripción de la tarea de desarrollo a realizar")
+        parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
+        parser.add_argument("--tier", default="balanced", choices=["fast", "balanced", "pro"],
+                            help="Tier de calidad del modelo a utilizar (default: balanced)")
+        parser.add_argument("-y", "--yes", action="store_true", dest="auto_confirm",
+                            help="Modo automático: ejecuta acciones de herramientas sin pedir confirmación")
+        parser.add_argument("--agent", default="", help="Nombre o UUID del agente personalizado a usar")
 
-    args = parser.parse_args()
+        args = parser.parse_args()
 
-    # Si se ejecuta sin argumentos o sin tarea, mostrar la ayuda
-    if not args.task:
-        parser.print_help()
-        sys.exit(0)
+        if not args.task:
+            parser.print_help()
+            sys.exit(0)
 
-    task_str = " ".join(args.task)
-    run_agent_loop(
-        task=task_str,
-        tier=args.tier,
-        auto_confirm=args.auto_confirm,
-        agent_id=args.agent,
-        base_url=args.url
-    )
+        task_str = " ".join(args.task)
+        run_agent_loop(
+            task=task_str,
+            tier=args.tier,
+            auto_confirm=args.auto_confirm,
+            agent_id=args.agent,
+            base_url=args.url
+        )
 
 if __name__ == "__main__":
     main()

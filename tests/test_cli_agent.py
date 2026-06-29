@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 # Añadir la raíz del proyecto y cli/ al path
@@ -12,7 +13,8 @@ from cli.arzor import (
     read_file_content,
     write_file_content,
     edit_file_content,
-    execute_system_command
+    execute_system_command,
+    resolve_agent_id
 )
 from app.main import app
 
@@ -68,4 +70,33 @@ def test_agent_step_endpoint_unauthorized():
             "tier": "balanced"
         }
     )
+    assert response.status_code == 401
+
+def test_resolve_agent_id_match():
+    # Mockear api_get para que devuelva una lista simulada de agentes del usuario
+    mock_response = {
+        "agents": [
+            {"id": "uuid-python-agent", "name": "Dev Python"},
+            {"id": "uuid-ops-agent", "name": "Devops Specialist"}
+        ]
+    }
+    with patch("cli.arzor.api_get", return_value=mock_response):
+        # 1. Coincidencia por nombre
+        agent_id = resolve_agent_id("Dev Python", "http://localhost:8000")
+        assert agent_id == "uuid-python-agent"
+        
+        # 2. Coincidencia insensible a mayúsculas
+        agent_id_lower = resolve_agent_id("dev python", "http://localhost:8000")
+        assert agent_id_lower == "uuid-python-agent"
+        
+        # 3. Sin coincidencia: devuelve el string original
+        fallback = resolve_agent_id("uuid-directo-1234", "http://localhost:8000")
+        assert fallback == "uuid-directo-1234"
+
+def test_get_agents_unauthorized():
+    response = client.get("/platform/agents")
+    assert response.status_code == 401
+
+def test_get_models_unauthorized():
+    response = client.get("/platform/keys/models/available")
     assert response.status_code == 401
