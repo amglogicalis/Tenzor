@@ -1528,12 +1528,15 @@ async function loadRoundTables() {
       const savedRounds = localStorage.getItem(`rt-rounds-${t.id}`) || '3';
       return `
         <div class="card" style="cursor:pointer" onclick="viewTable('${t.id}')">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <div style="font-size:28px">🔵</div>
-            <div>
-              <div style="font-weight:600">${esc(t.name)}</div>
-              <div style="font-size:12px;color:var(--text-3)">${esc(t.topic?.slice(0,80) || '')}…</div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="font-size:28px">🔵</div>
+              <div>
+                <div style="font-weight:600">${esc(t.name)}</div>
+                <div style="font-size:12px;color:var(--text-3)">${esc(t.topic?.slice(0,80) || '')}…</div>
+              </div>
             </div>
+            <button class="btn btn-sm btn-danger" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation();deleteTable('${t.id}','${esc(t.name)}')">🗑️</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <span class="badge ${t.status==='done'?'badge-green':t.status==='running'?'badge-amber':'badge-cyan'}">${t.status}</span>
@@ -1549,6 +1552,15 @@ async function loadRoundTables() {
         </div>
       `;
     }).join('');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteTable(tableId, tableName) {
+  if (!confirm(`¿Eliminar la mesa de debate "${tableName}"?`)) return;
+  try {
+    await api('DELETE', `/platform/round-table/${tableId}`);
+    toast('Mesa de debate eliminada', 'success');
+    loadRoundTables();
   } catch(e) { toast(e.message, 'error'); }
 }
 
