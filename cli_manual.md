@@ -18,6 +18,28 @@ pip install -e .
 ```
 *(El flag `-e` indica modo editable, lo que permite que cualquier cambio que se haga en el código se aplique al instante sin reinstalar).*
 
+### ⚡ Onboarding e Instalación Automática (Recomendado)
+
+El repositorio incluye asistentes de instalación que preparan el entorno virtual, configuran tus variables de conexión en el `.env`, registran el comando `arzor` en el PATH de tu usuario e inician el login de forma interactiva:
+
+#### En Windows 🪟
+Abre PowerShell como **Administrador** y ejecuta:
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope Process -Force
+.\setup.ps1
+```
+*(O puedes ejecutarlo omitiendo políticas temporales: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`)*.
+
+#### En Linux / macOS 🐧🍎
+Abre tu terminal y ejecuta:
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+**Nota**: Tras completar el asistente de setup por primera vez, cierra tu ventana de terminal actual y abre una nueva para que se cargue el comando `arzor` global en tu sistema.
+
+
 #### Configuración del PATH en Windows (si no se reconoce el comando):
 Si al ejecutar `arzor` recibes un error de "comando no reconocido", añade la carpeta de scripts de Python a tu variable de entorno `PATH` de Windows.
 * **Si instalaste como usuario (User Roaming)**:

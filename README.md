@@ -122,5 +122,27 @@ El proyecto incluye un potente cliente de consola autónomo e interactivo que ej
 * **Administración**: `arzor list-agents`, `arzor create-agent`, `arzor list-models`
 * **Ejecución de Tareas ReAct**: `arzor "Crea un script que consuma la API"`
 
-Para obtener instrucciones detalladas de instalación del comando global, configuración del PATH en Windows y Linux, y ejemplos prácticos de desarrollo autónomo, consulta el **[Manual del CLI de Arzor AIs](cli_manual.md)**.
+### ⚡ Onboarding e Instalación Automática (Recomendado)
+
+Puedes preparar el entorno e instalar el comando `arzor` globalmente ejecutando el script interactivo correspondiente en la raíz del proyecto:
+
+#### En Windows 🪟
+Abre PowerShell como **Administrador** y ejecuta:
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope Process -Force
+.\setup.ps1
+```
+*(O de forma directa omitiendo políticas: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`)*.
+
+#### En Linux / macOS 🐧🍎
+Abre tu terminal y ejecuta:
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+**Nota**: Tras completar el asistente de setup por primera vez, cierra tu ventana de terminal actual y abre una nueva para que se cargue el comando `arzor` global en tu sistema.
+
+Para obtener instrucciones completas, explicaciones detalladas de comandos y ejemplos de uso, consulta el **[Manual del CLI de Arzor AIs](cli_manual.md)**.
+
 
