@@ -65,6 +65,17 @@
       transition: border-color var(--transition);
       width: 100%;
     }
+    select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23eb393f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      background-size: 16px;
+      padding-right: 40px !important;
+      cursor: pointer;
+    }
     input:focus, textarea:focus, select:focus {
       border-color: var(--primary);
       box-shadow: 0 0 0 3px var(--primary-glow);
@@ -1034,6 +1045,22 @@
   </div>
 </div>
 
+<!-- View Table Members Modal -->
+<div class="modal-overlay" id="modal-view-table-members">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Agentes Participantes</div>
+      <button class="modal-close" onclick="closeModal('modal-view-table-members')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-view-table-members-body">
+      <!-- Se llena dinámicamente -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-purple" onclick="closeModal('modal-view-table-members')">Entendido</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -1086,7 +1113,7 @@ async function api(method, path, body = null) {
   if (state.token) opts.headers['Authorization'] = `Bearer ${state.token}`;
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(API + path, opts);
-  if (res.status === 401) { doLogout(); return null; }
+  if (res.status === 401 && !path.includes('/auth/login')) { doLogout(); return null; }
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.detail || `Error ${res.status}`);
   return data;
@@ -1683,11 +1710,30 @@ async function viewTable(tableId) {
       toast('Esta mesa no tiene agentes asignados.', 'info');
       return;
     }
-    const names = members.map(m => {
+    const ICONS = { dev:'💻', data:'📊', ops:'⚙️', science:'🔬', creative:'🎨', custom:'🤖' };
+    const html = members.map((m, idx) => {
       const found = state.agents.find(a => a.id === m.agent_id);
-      return found ? found.name : 'Agente Desconocido';
-    });
-    alert(`Agentes participantes en este debate:\n\n` + names.map((n, i) => `${i+1}. ${n}`).join('\n'));
+      const name = found ? found.name : 'Agente Desconocido';
+      const cat = found ? found.category : 'custom';
+      const tier = found ? found.base_tier : 'balanced';
+      const desc = found ? found.description : 'Agente participante en el debate.';
+      return `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:8px">
+          <div style="font-size:24px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:var(--bg-hover);border-radius:50%">${ICONS[cat] || '🤖'}</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px;color:var(--text-1)">${esc(name)}</div>
+            <div style="font-size:12px;color:var(--text-3)">${esc(desc)}</div>
+          </div>
+          <div class="session-agent-badge" style="background:var(--primary-glow);border-color:var(--border-active);color:var(--primary-light)">${esc(tier.toUpperCase())}</div>
+        </div>
+      `;
+    }).join('');
+    
+    document.getElementById('modal-view-table-members-body').innerHTML = `
+      <div style="margin-bottom:12px;font-size:13px;color:var(--text-2)">Agentes activos asignados a este debate:</div>
+      <div>${html}</div>
+    `;
+    openModal('modal-view-table-members');
   } catch(e) { toast(e.message, 'error'); }
 }
 
