@@ -1,0 +1,122 @@
+2026-06-29T09:27:50.895323814Z ==> Cloning from https://github.com/amglogicalis/Tenzor
+2026-06-29T09:27:51.668737177Z ==> Checking out commit b4f07ec95d1e89bb40663dc0e0a2bb9d398ccfd8 in branch main
+2026-06-29T09:27:53.238322363Z #1 [internal] load build definition from Dockerfile
+2026-06-29T09:27:53.238346584Z #1 transferring dockerfile: 697B done
+2026-06-29T09:27:53.238350344Z #1 DONE 0.0s
+2026-06-29T09:27:53.238353384Z 
+2026-06-29T09:27:53.238357514Z #2 [internal] load metadata for docker.io/library/python:3.12-slim
+2026-06-29T09:27:54.167733031Z #2 ...
+2026-06-29T09:27:54.167753762Z 
+2026-06-29T09:27:54.167759772Z #3 [auth] library/python:pull render-prod/docker-mirror-repository/library/python:pull token for us-west1-docker.pkg.dev
+2026-06-29T09:27:54.167767512Z #3 DONE 0.0s
+2026-06-29T09:27:54.318105352Z 
+2026-06-29T09:27:54.318128983Z #2 [internal] load metadata for docker.io/library/python:3.12-slim
+2026-06-29T09:27:57.9384949Z #2 DONE 4.9s
+2026-06-29T09:27:58.09176065Z 
+2026-06-29T09:27:58.091795051Z #4 [internal] load .dockerignore
+2026-06-29T09:27:58.091799841Z #4 transferring context: 2B done
+2026-06-29T09:27:58.091803931Z #4 DONE 0.0s
+2026-06-29T09:27:58.091807931Z 
+2026-06-29T09:27:58.091812141Z #5 [internal] load build context
+2026-06-29T09:27:58.091815941Z #5 DONE 0.0s
+2026-06-29T09:27:58.091819561Z 
+2026-06-29T09:27:58.091824801Z #6 [1/5] FROM docker.io/library/python:3.12-slim@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf
+2026-06-29T09:27:58.091828752Z #6 resolve docker.io/library/python:3.12-slim@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf 0.0s done
+2026-06-29T09:27:58.091832721Z #6 DONE 0.0s
+2026-06-29T09:27:58.091836332Z 
+2026-06-29T09:27:58.091840122Z #7 importing cache manifest
+2026-06-29T09:27:58.091844802Z #7 inferred cache manifest type: application/vnd.oci.image.manifest.v1+json done
+2026-06-29T09:27:58.091851872Z #7 DONE 0.1s
+2026-06-29T09:27:58.275552469Z 
+2026-06-29T09:27:58.27557839Z #6 [1/5] FROM docker.io/library/python:3.12-slim@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf
+2026-06-29T09:27:58.27558332Z #6 DONE 0.0s
+2026-06-29T09:27:58.27558726Z 
+2026-06-29T09:27:58.27559189Z #5 [internal] load build context
+2026-06-29T09:27:58.27559643Z #5 transferring context: 3.03MB 0.0s done
+2026-06-29T09:27:58.27560029Z #5 DONE 0.0s
+2026-06-29T09:27:58.27560397Z 
+2026-06-29T09:27:58.27560849Z #8 [2/5] WORKDIR /code
+2026-06-29T09:27:58.275612261Z #8 CACHED
+2026-06-29T09:27:58.275615911Z 
+2026-06-29T09:27:58.275620271Z #9 [3/5] COPY ./requirements.txt /code/requirements.txt
+2026-06-29T09:27:58.275624131Z #9 CACHED
+2026-06-29T09:27:58.275627771Z 
+2026-06-29T09:27:58.275632061Z #10 [4/5] RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+2026-06-29T09:27:58.275635821Z #10 CACHED
+2026-06-29T09:27:58.37758832Z 
+2026-06-29T09:27:58.37761002Z #10 [4/5] RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+2026-06-29T09:27:58.961998447Z #10 extracting sha256:e95a6c7ea7d49b37920899b023ecd0e32796c976c1748491f76cae53ba86d13a
+2026-06-29T09:27:59.44413059Z #10 extracting sha256:e95a6c7ea7d49b37920899b023ecd0e32796c976c1748491f76cae53ba86d13a 0.6s done
+2026-06-29T09:27:59.44414738Z #10 DONE 1.3s
+2026-06-29T09:27:59.594523691Z 
+2026-06-29T09:27:59.594560782Z #10 [4/5] RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+2026-06-29T09:27:59.594567802Z #10 extracting sha256:aff2d9f8dc87f4c10bbb7f438f3a325169379776bdfad5c49e4be5acc3c2f192
+2026-06-29T09:28:01.463138097Z #10 extracting sha256:aff2d9f8dc87f4c10bbb7f438f3a325169379776bdfad5c49e4be5acc3c2f192 2.0s done
+2026-06-29T09:28:01.463152347Z #10 DONE 3.3s
+2026-06-29T09:28:01.613384216Z 
+2026-06-29T09:28:01.613407356Z #10 [4/5] RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+2026-06-29T09:28:01.613411656Z #10 extracting sha256:df79d931cd67092e2b8e48d8f6369922571efe4ee0f9af71636ce36600481492
+2026-06-29T09:28:02.042568984Z #10 extracting sha256:df79d931cd67092e2b8e48d8f6369922571efe4ee0f9af71636ce36600481492 0.6s done
+2026-06-29T09:28:02.042590394Z #10 DONE 3.9s
+2026-06-29T09:28:02.265914795Z 
+2026-06-29T09:28:02.265930996Z #10 [4/5] RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+2026-06-29T09:28:02.265934786Z #10 extracting sha256:b32430367bf08f32c23778909985ac645d1794f0aeef670aa796a50c8751527d 0.0s done
+2026-06-29T09:28:02.265938046Z #10 extracting sha256:e107a7510186b2e2f995a1f21fc4afb12dd4a1419622cc92ac1a574a5ba71c7a 0.0s done
+2026-06-29T09:28:02.265941106Z #10 extracting sha256:462bd825650bf4f74a1a89d177f689355e6915cbdf49c0d3f5c3449f8249df59 0.0s done
+2026-06-29T09:28:02.265944176Z #10 extracting sha256:61a8405f0ec69e6968896f8c8061b90b0f03893b50ab7f5b5e7227731a46e744
+2026-06-29T09:28:04.057566988Z #10 extracting sha256:61a8405f0ec69e6968896f8c8061b90b0f03893b50ab7f5b5e7227731a46e744 1.9s done
+2026-06-29T09:28:04.057589759Z #10 DONE 5.9s
+2026-06-29T09:28:04.2129056Z 
+2026-06-29T09:28:04.212927811Z #11 [5/5] COPY ./app /code/app
+2026-06-29T09:28:04.212933241Z #11 DONE 0.1s
+2026-06-29T09:28:04.212937581Z 
+2026-06-29T09:28:04.212943681Z #12 exporting to image
+2026-06-29T09:28:04.212948861Z #12 exporting layers 0.1s done
+2026-06-29T09:28:04.333072798Z #12 pushing layers
+2026-06-29T09:28:04.892749344Z #12 pushing layers 0.7s done
+2026-06-29T09:28:05.135906008Z #12 DONE 0.9s
+2026-06-29T09:28:05.135923898Z 
+2026-06-29T09:28:05.135929159Z #13 exporting cache to registry
+2026-06-29T09:28:05.135933879Z #13 sending cache export
+2026-06-29T09:28:05.680645131Z #13 sending cache export 1.3s done
+2026-06-29T09:28:05.680666501Z #13 DONE 1.4s
+2026-06-29T09:28:10.087255627Z ==> Deploying...
+2026-06-29T09:28:10.276819142Z ==> Setting WEB_CONCURRENCY=1 by default, based on available CPUs in the instance
+2026-06-29T09:28:25.12424504Z See README for more details:
+2026-06-29T09:28:25.12424772Z 
+2026-06-29T09:28:25.124259751Z https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+2026-06-29T09:28:25.124262911Z 
+2026-06-29T09:28:25.124267301Z   import google.generativeai as genai
+2026-06-29T09:28:26.529608621Z INFO:app.db:db: cliente Supabase anon inicializado.
+2026-06-29T09:28:26.618772482Z INFO:app.db:db: cliente Supabase admin (service_role) inicializado.
+2026-06-29T09:28:26.618981364Z INFO:app.services.key_service:KeyService: usando cliente admin (service_role). Modo producción activo.
+2026-06-29T09:28:26.629574244Z INFO:app.services.ai_service:Cliente Groq inicializado con éxito.
+2026-06-29T09:28:26.629587685Z INFO:app.services.ai_service:Cliente Google Gemini inicializado con éxito.
+2026-06-29T09:28:26.745368599Z INFO:app.services.rag_service:Documentación local no encontrada. Intentando descargar desde Google Cloud Storage (GCS)...
+2026-06-29T09:28:26.746569853Z ERROR:app.services.rag_service:Error cargando GOOGLE_CREDENTIALS_JSON para GCS: Invalid \escape: line 5 column 46 (char 168)
+2026-06-29T09:28:38.884083316Z ERROR:app.services.rag_service:Excepción descargando documentación de GCS: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2026-06-29T09:28:38.884118698Z WARNING:app.services.rag_service:La carpeta de documentación RAG 'docs_traning' está vacía y no se pudo descargar de GCS.
+2026-06-29T09:28:39.220674489Z INFO:app.services.key_service:KeyService: usando cliente admin (service_role). Modo producción activo.
+2026-06-29T09:28:39.331694421Z INFO:app.services.platform_auth_service:PlatformAuthService: cliente Supabase (anon) inicializado.
+2026-06-29T09:28:39.424887659Z INFO:app.services.platform_auth_service:PlatformAuthService: cliente admin (service_role) inicializado.
+2026-06-29T09:28:39.519557178Z INFO:app.services.agent_service:AgentService: usando cliente admin (service_role).
+2026-06-29T09:28:39.622243078Z INFO:app.services.platform_rag_service:PlatformRAGService: usando cliente admin (service_role).
+2026-06-29T09:28:39.726476314Z INFO:app.services.cooldown_service:CooldownService: inicializado.
+2026-06-29T09:28:39.728652727Z INFO:app.services.provider_key_pool_service:KeyPool: key de sistema registrada → sys-groq-1 [groq]
+2026-06-29T09:28:39.728663648Z INFO:app.services.provider_key_pool_service:KeyPool: key de sistema registrada → sys-google-1 [google]
+2026-06-29T09:28:39.72869694Z INFO:app.services.provider_key_pool_service:KeyPool: key de sistema registrada → sys-openrouter-1 [openrouter]
+2026-06-29T09:28:39.731649431Z INFO:app.services.platform_rag_service:PlatformRAGService: usando cliente admin (service_role).
+2026-06-29T09:28:39.731659222Z INFO:app.services.agent_cache_service:AgentCacheService: usando cliente admin (service_role).
+2026-06-29T09:28:39.731673053Z INFO:app.services.platform_chat_service:PlatformChatService: usando cliente admin (service_role).
+2026-06-29T09:28:39.731715305Z INFO:app.services.agent_cache_service:AgentCacheService: usando cliente admin (service_role).
+2026-06-29T09:28:39.922575135Z INFO:app.services.round_table_service:RoundTableService: Supabase (service key) inicializado.
+2026-06-29T09:28:40.331341857Z INFO:     Started server process [7]
+2026-06-29T09:28:40.331409411Z INFO:     Waiting for application startup.
+2026-06-29T09:28:40.331908391Z INFO:auto_shutdown:Bucle de auto-apagado por inactividad iniciado.
+2026-06-29T09:28:40.331918132Z INFO:     Application startup complete.
+2026-06-29T09:28:40.332173677Z INFO:     Uvicorn running on http://0.0.0.0:10000 (Press CTRL+C to quit)
+2026-06-29T09:28:40.725957189Z INFO:     127.0.0.1:53912 - "HEAD / HTTP/1.1" 405 Method Not Allowed
+2026-06-29T09:46:11.091969966Z ==> Timed Out
+2026-06-29T09:46:11.095714291Z ==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+2026-06-29T09:46:12.450187828Z ==> Detected service running on port 10000
+2026-06-29T09:46:12.766072434Z ==> Docs on specifying a port: https://render.com/docs/web-services#port-binding

@@ -35,9 +35,23 @@ from app.services.agent_cache_service import AgentCacheService
 
 logger = logging.getLogger(__name__)
 
-# Número máximo de turnos del historial que se envían al modelo.
-# Evita contextos gigantes; los más recientes son los más relevantes.
-MAX_HISTORY_TURNS = 20   # 20 mensajes (10 turnos user/assistant)
+# ─── Límites inteligentes de prompt e historial por tier ─────────────────────
+# Calibrados conservadoramente sobre la ventana de contexto del modelo más
+# restrictivo de cada tier (ver PROVIDER_MODEL_MAP en provider_key_pool_service).
+#
+#  fast     → Modelos 8B / contextos de 4K-8K (HuggingFace, Cerebras, Cloudflare)
+#  balanced → Modelos 70B / contextos de 16K-32K
+#  pro      → Modelos grandes / contextos de 32K+
+#
+# max_prompt_words : límite de palabras del prompt de entrada del usuario.
+# max_history_msgs : ventana deslizante de mensajes del historial de conversación.
+TIER_LIMITS: dict = {
+    "fast":     {"max_prompt_words": 400,  "max_history_msgs": 6},
+    "balanced": {"max_prompt_words": 900,  "max_history_msgs": 12},
+    "pro":      {"max_prompt_words": 2000, "max_history_msgs": 20},
+}
+# Tier por defecto si el agente no tiene uno definido
+_DEFAULT_TIER = "balanced"
 
 # Encabezado del bloque de contexto RAG inyectado en el system prompt
 _RAG_BLOCK_HEADER = (
@@ -146,8 +160,19 @@ class PlatformChatService:
         # 1. Cargar agente + versión activa
         agent = self._load_agent(agent_id=agent_id, user_id=user_id)
         system_instructions = self._extract_system_instructions(agent)
-        tier = agent.get("base_tier", "balanced")
+        tier = agent.get("base_tier", _DEFAULT_TIER)
         retrieval_profile = self._extract_retrieval_profile(agent)
+
+        # 1b. Validar longitud del prompt de entrada según tier
+        limits = TIER_LIMITS.get(tier, TIER_LIMITS[_DEFAULT_TIER])
+        word_count = len(user_message.split())
+        max_words = limits["max_prompt_words"]
+        if word_count > max_words:
+            raise ValueError(
+                f"El prompt supera el límite de {max_words} palabras para el tier '{tier}' "
+                f"({word_count} palabras). Reduce el texto para optimizar el uso de tokens "
+                f"y evitar errores por límite de contexto del modelo."
+            )
 
         # Cargar preferencias de proveedor y modelo del perfil del agente
         preferred_provider = retrieval_profile.get("preferred_provider", None) if retrieval_profile else None
@@ -175,8 +200,8 @@ class PlatformChatService:
             session_id=session_id, first_message=user_message,
         )
 
-        # 3. Historial de conversación
-        history = self._load_history(session.session_id)
+        # 3. Historial de conversación (ventana deslizante según tier)
+        history = self._load_history(session.session_id, tier=tier)
 
         # 4. RAG — decidir si buscar
         rag_chunks_used = 0
@@ -498,20 +523,26 @@ class PlatformChatService:
             session_id=s["id"], agent_id=agent_id, user_id=user_id, title=title
         )
 
-    def _load_history(self, session_id: str) -> List[Dict[str, str]]:
+    def _load_history(self, session_id: str, tier: str = _DEFAULT_TIER) -> List[Dict[str, str]]:
         """
-        Carga el historial de mensajes de la sesión.
-        Devuelve los últimos MAX_HISTORY_TURNS en formato OpenAI [{"role":..,"content":..}].
+        Carga el historial de mensajes de la sesión con ventana deslizante por tier.
+
+        La ventana deslizante (max_history_msgs) limita los mensajes enviados al
+        modelo para evitar el consumo excesivo de tokens en el contexto, especialmente
+        crítico en modelos gratuitos con ventanas pequeñas (4K-8K tokens).
+
+        Devuelve los últimos N mensajes en formato OpenAI [{"role":..,"content":..}].
         """
         if not self._sb or session_id in ("local-session",):
             return []
+        max_msgs = TIER_LIMITS.get(tier, TIER_LIMITS[_DEFAULT_TIER])["max_history_msgs"]
         try:
             resp = (
                 self._sb.table("chat_messages")
                 .select("role, content")
                 .eq("session_id", session_id)
                 .order("created_at", desc=False)
-                .limit(MAX_HISTORY_TURNS)
+                .limit(max_msgs)
                 .execute()
             )
             return [

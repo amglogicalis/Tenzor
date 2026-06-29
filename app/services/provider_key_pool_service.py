@@ -79,12 +79,12 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
     },
     "cloudflare": {
         "fast":     "@cf/meta/llama-3-8b-instruct",
-        "balanced": "@cf/meta/llama-3-8b-instruct",
-        "pro":      "@cf/mistral/mistral-7b-instruct-v0.2",
+        "balanced": "@cf/meta/llama-3.1-8b-instruct",
+        "pro":      "@cf/meta/llama-3.1-8b-instruct",
     },
     "huggingface": {
         "fast":     "microsoft/Phi-3-mini-4k-instruct",
-        "balanced": "meta-llama/Llama-3.2-3B-Instruct",
+        "balanced": "mistralai/Mistral-7B-Instruct-v0.3",
         "pro":      "Qwen/Qwen2.5-7B-Instruct",
     },
     "deepseek": {
@@ -98,9 +98,9 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
         "pro":      "grok-2",
     },
     "perplexity": {
-        "fast":     "sonar-reasoning",
-        "balanced": "sonar",
-        "pro":      "sonar",
+        "fast":     "sonar",
+        "balanced": "sonar-reasoning",
+        "pro":      "sonar-reasoning",
     },
     "mistral": {
         "fast":     "mistral-small-latest",
@@ -128,7 +128,7 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
         "pro":      "Meta-Llama-3.1-70B-Instruct",
     },
     "siliconflow": {
-        "fast":     "deepseek-ai/DeepSeek-V3",
+        "fast":     "Qwen/Qwen2.5-7B-Instruct",
         "balanced": "deepseek-ai/DeepSeek-V3",
         "pro":      "deepseek-ai/DeepSeek-R1",
     },
@@ -149,7 +149,7 @@ PROVIDER_MODEL_MAP: Dict[str, Dict[str, str]] = {
     },
     "watsonx": {
         "fast":     "ibm/granite-3-8b-instruct",
-        "balanced": "meta-llama/llama-3-8b-instruct",
+        "balanced": "meta-llama/llama-3-1-70b-instruct",
         "pro":      "meta-llama/llama-3-3-70b-instruct",
     },
 }

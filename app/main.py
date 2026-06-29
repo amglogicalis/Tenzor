@@ -54,10 +54,11 @@ from fastapi.responses import FileResponse
 # Montar carpeta de archivos estáticos (CSS, JS, imágenes)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     """
     Sirve el frontend interactivo de Tenzor.
+    Acepta HEAD para el health check de Render (evita 405 → deploy timeout).
     """
     return FileResponse("app/static/index.html")
 

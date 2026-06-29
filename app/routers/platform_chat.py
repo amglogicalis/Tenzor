@@ -117,6 +117,8 @@ def send_message(
         msg = str(e)
         if "no encontrado" in msg.lower() or "acceso" in msg.lower():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+        if "límite" in msg.lower() or "supera" in msg.lower():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=msg)
     except Exception as e:
         logger.error(f"Error inesperado en chat agent={agent_id} user={user_id}: {e}")

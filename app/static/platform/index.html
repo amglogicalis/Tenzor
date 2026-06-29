@@ -536,6 +536,44 @@
       border-color: rgba(235, 57, 63, 0.4) !important;
       box-shadow: 0 12px 30px -10px rgba(235, 57, 63, 0.15), 0 0 15px rgba(235, 57, 63, 0.08) !important;
     }
+    /* ── Word limit counter ──────────────────────────────────────────────── */
+    .chat-input-wrapper { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .word-limit-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px; color: var(--text-3); padding: 0 2px;
+      transition: color 0.3s ease;
+    }
+    .word-limit-bar.warn  { color: #f59e0b; }
+    .word-limit-bar.over  { color: var(--error); font-weight: 600; }
+    .word-limit-track {
+      flex: 1; height: 2px; background: var(--border); border-radius: 2px;
+      margin: 0 8px; overflow: hidden;
+    }
+    .word-limit-fill {
+      height: 100%; border-radius: 2px; width: 0%;
+      background: #10b981; transition: width 0.2s ease, background 0.3s ease;
+    }
+    .word-limit-fill.warn { background: #f59e0b; }
+    .word-limit-fill.over { background: var(--error); }
+    /* ── New chat button ────────────────────────────────────────── */
+    .new-chat-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin: 12px; padding: 10px 14px; border-radius: var(--radius-md);
+      background: linear-gradient(135deg, rgba(229,9,20,0.15), rgba(153,27,27,0.1));
+      border: 1px dashed rgba(229,9,20,0.4); color: var(--primary-light);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all var(--transition);
+    }
+    .new-chat-btn:hover {
+      background: linear-gradient(135deg, rgba(229,9,20,0.25), rgba(153,27,27,0.2));
+      border-color: var(--primary); box-shadow: 0 0 12px rgba(229,9,20,0.2);
+    }
+    .session-agent-badge {
+      font-size: 10px; font-weight: 600; color: var(--text-3);
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 6px; display: inline-block;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -729,6 +767,9 @@
           <div class="chat-sidebar-header">
             <h3>Sesiones</h3>
           </div>
+          <button class="new-chat-btn" id="new-chat-btn" onclick="startNewSession()" disabled>
+            <span>✦</span> Nueva conversación
+          </button>
           <div class="session-list" id="session-list"></div>
         </div>
         <div class="chat-main">
@@ -754,8 +795,16 @@
             <input type="file" id="chat-file-input" style="display:none"
               accept=".txt,.md,.pdf,.docx" onchange="onChatFileSelected(event)">
             <button class="attach-btn" title="Adjuntar archivo" onclick="document.getElementById('chat-file-input').click()">📎</button>
-            <textarea class="chat-input" id="chat-input" placeholder="Escribe tu mensaje…"
-              rows="1" onkeydown="handleChatKey(event)" oninput="autoGrow(this)"></textarea>
+            <div class="chat-input-wrapper">
+              <textarea class="chat-input" id="chat-input" placeholder="Escribe tu mensaje…"
+                rows="1" onkeydown="handleChatKey(event)" oninput="autoGrow(this); updateWordCount()"></textarea>
+              <div class="word-limit-bar" id="word-limit-bar" style="display:none">
+                <span id="word-count-label">0 / 900 palabras</span>
+                <div class="word-limit-track">
+                  <div class="word-limit-fill" id="word-limit-fill"></div>
+                </div>
+              </div>
+            </div>
             <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>➤</button>
           </div>
         </div>
@@ -1000,6 +1049,7 @@ let state = {
   agents: [],
   currentAgentId: null,
   currentSessionId: null,
+  currentAgentTier: 'balanced',  // tier del agente activo (controla límite de palabras)
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1316,10 +1366,18 @@ function updateChatHeader(agent) {
   document.getElementById('chat-agent-name').textContent = agent.name;
   document.getElementById('chat-agent-tier').textContent = `Tier: ${agent.base_tier}`;
   document.getElementById('chat-agent-icon').textContent = ICONS[agent.category] || '🤖';
+  // Guardar tier para validación de límite de palabras
+  state.currentAgentTier = agent.base_tier || 'balanced';
+  // Resetear y mostrar el contador de palabras con el nuevo límite
+  updateWordCount();
 }
 
 function enableSendBtn() {
-  document.getElementById('send-btn').disabled = !state.currentAgentId;
+  // Delega a updateWordCount para no sobreescribir su lógica de bloqueo por límite
+  updateWordCount();
+  // Activar/desactivar botón de nueva conversación según agente seleccionado
+  const newBtn = document.getElementById('new-chat-btn');
+  if (newBtn) newBtn.disabled = !state.currentAgentId;
 }
 
 async function loadSessions() {
@@ -1327,13 +1385,25 @@ async function loadSessions() {
     const data = await api('GET', '/platform/chat/sessions');
     const list = document.getElementById('session-list');
     const sessions = data?.sessions || [];
-    if (!sessions.length) { list.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-3)">No hay sesiones aún</div>'; return; }
-    list.innerHTML = sessions.map(s => `
-      <div class="session-item ${s.id === state.currentSessionId ? 'active' : ''}" onclick="loadSession('${s.id}','${s.agent_id}')">
-        <div class="session-title">${esc(s.title || 'Sesión')}</div>
-        <div class="session-date">${formatDate(s.updated_at)}</div>
-      </div>
-    `).join('');
+    if (!sessions.length) {
+      list.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-3)">No hay sesiones aún</div>';
+      return;
+    }
+    // Agrupar visualmente: ordenar por agente para que las sesiones del mismo agente queden juntas
+    const agentMap = {};
+    for (const a of state.agents) agentMap[a.id] = a;
+
+    list.innerHTML = sessions.map(s => {
+      const agentName = agentMap[s.agent_id]?.name || 'Agente';
+      const isActive  = s.id === state.currentSessionId;
+      return `
+        <div class="session-item ${isActive ? 'active' : ''}" onclick="loadSession('${s.id}','${s.agent_id}')">
+          <div class="session-agent-badge">${esc(agentName)}</div>
+          <div class="session-title">${esc(s.title || 'Sesión')}</div>
+          <div class="session-date">${formatDate(s.updated_at)}</div>
+        </div>
+      `;
+    }).join('');
   } catch(e) { console.error(e); }
 }
 
@@ -1408,7 +1478,7 @@ async function sendMessage() {
   if (!state.currentAgentId) return;
 
   const userDisplay = msg || `📎 ${_chatAttachedFile?.name}`;
-  input.value = ''; autoGrow(input);
+  input.value = ''; autoGrow(input); updateWordCount();
   appendMessage('user', userDisplay);
   document.getElementById('send-btn').disabled = true;
   const typingId = appendTyping();
@@ -1500,6 +1570,44 @@ function handleChatKey(e) {
 function autoGrow(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+// Límites de palabras por tier (deben coincidir con TIER_LIMITS en platform_chat_service.py)
+const TIER_WORD_LIMITS = { fast: 400, balanced: 900, pro: 2000 };
+
+function updateWordCount() {
+  const input    = document.getElementById('chat-input');
+  const bar      = document.getElementById('word-limit-bar');
+  const label    = document.getElementById('word-count-label');
+  const fill     = document.getElementById('word-limit-fill');
+  const sendBtn  = document.getElementById('send-btn');
+  const tier     = state.currentAgentTier || 'balanced';
+  const maxWords = TIER_WORD_LIMITS[tier] || 900;
+  const words    = input.value.trim() ? input.value.trim().split(/\s+/).length : 0;
+  const pct      = Math.min((words / maxWords) * 100, 100);
+  const isOver   = words > maxWords;
+  const isWarn   = pct >= 75 && !isOver;
+
+  // Mostrar barra siempre que haya agente seleccionado (aunque el input esté vacío)
+  bar.style.display = state.currentAgentId ? 'flex' : 'none';
+
+  label.textContent = `${words.toLocaleString()} / ${maxWords.toLocaleString()} palabras`;
+  fill.style.width  = pct + '%';
+
+  // Estados visuales
+  bar.classList.toggle('warn', isWarn);
+  bar.classList.toggle('over', isOver);
+  fill.classList.toggle('warn', isWarn);
+  fill.classList.toggle('over', isOver);
+
+  // Bloquear envío si supera el límite o no hay texto/agente
+  if (isOver) {
+    sendBtn.disabled = true;
+    sendBtn.title = `Límite de ${maxWords} palabras superado`;
+  } else {
+    sendBtn.disabled = !state.currentAgentId || !input.value.trim();
+    sendBtn.title = '';
+  }
 }
 
 async function sendFeedback(msgId, value) {
