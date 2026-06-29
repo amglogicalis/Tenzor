@@ -380,6 +380,7 @@ class RoundTableService:
             topic=topic,
             participants_list=participants_list,
             history=self._format_history(history) if history else "(Eres el primero en hablar.)",
+            agent_name=agent_data["name"],
         )
         try:
             result = provider_router.infer(
