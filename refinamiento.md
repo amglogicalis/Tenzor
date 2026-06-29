@@ -14,6 +14,8 @@ Hecho -- 4.Explicamiento y revision del fallback, y si es posible mejorarlo
 
 8.Funcion de limitar palabras por pompt/consulta con el objetivo de ahorro y optimizacion, tambien a decidir limite de archivos. Antes de hcaer cambios con este paso preguntame como lo implementaremos.
 
+Extra: al iniciar sesion y escribir mal la contraseña, o que falta confirmacion, mostrar: "Has introducido mal la contraseña" en vez de read null y un error raro tipo sql 
+
 9.Hacer un onboarding que explique que es Arzor, como conseguir las api key gratis y como funcionan estas, como configurarlas y como usar arzor. Esto se ejcuta siempre que se detecta que el usuario se acab de craer y que es nuevo.
 
 - PASO FINAL Y NUEVO COMIENZO/ ETAPA FINAL DE Arzor: Empezar la optimizacion, mejora y desarrollo completo y verdadero de Arzros AIs Cli, el antigravity/codex nuestro.

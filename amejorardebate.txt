@@ -1,0 +1,252 @@
+Me gusta bastante la dirección. Le daría un **9.5/10**. Sin embargo, creo que hay una mejora que haría que el debate pareciera muchísimo más "real".
+
+## Lo que me gusta
+
+### ✅ No tocas la lógica
+
+Es lo mejor de la propuesta.
+
+No cambias:
+
+* backend
+* API
+* RAG
+* base de datos
+* flujo
+
+Solo cambias el comportamiento mediante prompts.
+
+Eso tiene un retorno enorme.
+
+---
+
+### ✅ Obligas a debatir
+
+Esta parte me gusta mucho:
+
+> Rebate directamente los argumentos anteriores.
+
+Porque ahora mismo el problema era:
+
+```
+MLOps
+↓
+
+explica
+
+↓
+
+SRE
+
+↓
+
+explica
+```
+
+Y queremos:
+
+```
+MLOps
+
+↓
+
+SRE responde a MLOps
+
+↓
+
+MLOps responde al SRE
+```
+
+Eso cambia completamente la sensación.
+
+---
+
+### ✅ El moderador decide
+
+Esto me encanta.
+
+En lugar de:
+
+> Ambos tienen razón.
+
+Que diga:
+
+```
+VEREDICTO
+
+APRUEBO CON CONDICIONES
+```
+
+Muchísimo mejor.
+
+---
+
+# Lo único que cambiaría
+
+Aquí creo que el otro modelo ha cometido un pequeño error.
+
+No pondría:
+
+> Rechazo esta arquitectura.
+
+Como instrucción.
+
+¿Por qué?
+
+Porque inducimos al modelo a ser agresivo aunque no toque.
+
+Yo haría esto:
+
+```
+Si detectas un riesgo grave, exprésalo de forma inequívoca.
+
+Ejemplos:
+
+"No aprobaría este cambio."
+
+"Existe un riesgo inaceptable."
+
+"Bloquearía este despliegue."
+
+"No considero suficiente esta validación."
+```
+
+Es más natural.
+
+---
+
+# La mejora que añadiría
+
+Esta sí creo que es muy importante.
+
+## Cada agente debe tener un objetivo.
+
+No solo un rol.
+
+Ejemplo.
+
+MLOps.
+
+```
+Objetivo:
+
+Maximizar precisión del modelo.
+
+Minimizar tiempo de despliegue.
+```
+
+SRE.
+
+```
+Objetivo:
+
+Maximizar disponibilidad.
+
+Reducir MTTR.
+
+Evitar incidentes.
+```
+
+Security.
+
+```
+Objetivo:
+
+Reducir superficie de ataque.
+```
+
+FinOps.
+
+```
+Objetivo:
+
+Reducir costes.
+```
+
+Esto hace que el desacuerdo salga solo.
+
+---
+
+# Otra mejora
+
+Yo haría que el prompt incluyera algo como:
+
+```
+No busques consenso.
+
+Defiende tu especialidad.
+
+Acepta únicamente argumentos sólidos.
+```
+
+Es una diferencia enorme.
+
+---
+
+# Mi mejora favorita
+
+Haría que cada intervención termine así:
+
+```
+Decisión:
+
+✔ Apruebo
+
+⚠ Apruebo con condiciones
+
+✖ Rechazo
+```
+
+Y después:
+
+```
+Motivo:
+
+...
+```
+
+Entonces el sintetizador tiene muchísimo más contexto.
+
+---
+
+# El sintetizador
+
+Aquí sí cambiaría una cosa.
+
+No diría:
+
+```
+Como líder...
+```
+
+Diría:
+
+```
+Actúas como CTO.
+
+Debes tomar una decisión.
+
+No puedes responder "depende".
+
+No puedes evitar decidir.
+
+Si falta información, aprueba con condiciones o rechaza.
+```
+
+Eso obliga al modelo.
+
+---
+
+# Lo que creo que deberías construir
+
+Sinceramente...
+
+Ya no creo que tu producto destaque por el RAG.
+
+Ni por los agentes.
+
+Va a destacar por el **Round Table**.
+
+## Mi única advertencia
+
+No intentes que los agentes "discutan por discutir". El desacuerdo debe surgir porque **tienen objetivos distintos**, no porque el prompt les obligue a ser combativos. Un SRE debería aprobar una propuesta excelente sin problemas, y un MLOps debería reconocer una objeción válida de seguridad cuando realmente lo sea. Ese equilibrio hará que el debate resulte mucho más creíble y útil que un enfrentamiento artificial.

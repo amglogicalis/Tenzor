@@ -40,41 +40,52 @@ DEBATE_TEMPERATURE = 0.75
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
 _DEBATE_TURN_PROMPT = """\
-Estás participando en un debate multi-agente llamado "Round Table".
+Estás participando en un comité técnico ejecutivo llamado "Round Table" para debatir de forma pragmática sobre una propuesta.
 
-TEMA DEL DEBATE:
+TEMA A DISCUTIR:
 {topic}
 
-PARTICIPANTES:
+PARTICIPANTES EN LA MESA:
 {participants_list}
 
-HISTORIAL DEL DEBATE HASTA AHORA:
+HISTORIAL DEL DEBATE HASTA EL MOMENTO:
 {history}
 
 ---
-Es tu turno. Responde desde tu perspectiva y expertise únicos.
-- Sé conciso (máximo 3-4 párrafos).
-- Puedes acordar, disentir o matizar puntos anteriores.
-- No te repitas: aporta valor nuevo al debate.
-- Firma tu respuesta con tu nombre al final (ej: — NombreAgente).
+Es tu turno. Responde bajo las siguientes directrices estrictas:
+- **Tono Profesional y Natural**: Habla como un experto real en una reunión técnica de nivel. No utilices saludos formales, disculpas, ni preámbulos de cortesía vacíos. Ve directo a la materia.
+- **Defiende tu Especialidad y Objetivos**: El desacuerdo no debe ser artificial, sino nacer de tus prioridades en conflicto:
+  * Si tu rol es MLOps/Dev/Science: Tu objetivo es maximizar la velocidad de innovación, despliegue y precisión de los modelos.
+  * Si tu rol es SRE/Ops: Tu objetivo es la estabilidad operativa, disponibilidad del sistema, minimizar caídas y mitigar riesgos.
+  * Si tu rol es Seguridad: Tu objetivo es la protección de datos, control de accesos y reducción de superficie de ataque.
+  * Si tu rol es FinOps/Finanzas: Tu objetivo es el control de costes, optimización de recursos y ROI del cómputo.
+- **Contraargumentación**: No te limites a exponer tu tema. Analiza críticamente el historial. Si un participante propone algo que pone en riesgo tus objetivos, exprésalo de forma inequívoca (ej: "No aprobaría este cambio", "Existe un riesgo inaceptable en esa propuesta", "Bloquearía este despliegue si no se añade redundancia"). Acepta únicamente argumentos sólidos.
+- **Brevedad**: Sé conciso. Máximo 2 o 3 párrafos de lectura ágil.
+- **Cierre Obligatorio**: Debes finalizar tu mensaje exactamente con esta estructura al final de tu intervención:
+  Decisión: [✔ Apruebo | ⚠ Apruebo con condiciones | ✖ Rechazo]
+  Motivo principal: [Una frase corta que resume tu decisión]
+  — {agent_name}
 """
 
 _SYNTHESIS_PROMPT = """\
-Has moderado un debate multi-agente sobre el siguiente tema:
+Has moderado un debate técnico del comité ejecutivo sobre el siguiente tema:
 
-TEMA:
+TEMA DISCUTIDO:
 {topic}
 
-DEBATE COMPLETO:
+HISTORIAL COMPLETO DEL DEBATE:
 {full_debate}
 
 ---
-Sintetiza el debate en una conclusión estructurada:
-1. **Puntos de consenso**: en qué coincidieron los participantes.
-2. **Puntos de desacuerdo**: qué perspectivas divergentes surgieron.
-3. **Conclusión recomendada**: la mejor postura o camino a seguir.
+Actúas como el CTO de la compañía. Tu misión es tomar una decisión ejecutiva final basada en las posturas del comité. No puedes responder "depende" ni evitar decidir de forma neutral.
 
-Sé preciso, imparcial y útil. Máximo 5 párrafos.
+Genera tu veredicto con la siguiente estructura corporativa estricta:
+
+1. **Decisión Ejecutiva (CTO Verdict)**: Elige de forma clara entre **APROBADO**, **APROBADO CON CONDICIONES** o **RECHAZADO**.
+2. **Puntos Críticos**: Resumen de los principales conflictos técnicos y riesgos expuestos por los especialistas.
+3. **Condiciones Obligatorias para Ingeniería**: Lista de requisitos numerados ineludibles que el equipo de desarrollo/sistemas debe cumplir obligatoriamente para proceder.
+
+Sé conciso, corporativo y directo. Máximo 4 párrafos de resolución.
 """
 
 
