@@ -42,7 +42,7 @@ class AddMemberRequest(BaseModel):
 
 class StartDebateRequest(BaseModel):
     rounds: int = Field(1, ge=MIN_ROUNDS, le=MAX_ROUNDS,
-                        description=f"Número de rondas ({MIN_ROUNDS}-{MAX_ROUNDS})")
+                        description=f"Número de rondas ({MIN_ROUNDS} a {MAX_ROUNDS})")
 
 
 # ─── Endpoints: Mesas ─────────────────────────────────────────────────────────

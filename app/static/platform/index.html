@@ -1556,8 +1556,14 @@ async function createTable() {
 }
 
 async function startDebate(tableId) {
-  const rounds = 1;
-  toast('Iniciando debate… esto puede tardar.', 'success');
+  const roundsStr = prompt("¿Cuántas rondas de debate deseas ejecutar? (Mínimo 1, máximo 9999)", "3");
+  if (roundsStr === null) return; // cancelado
+  const rounds = parseInt(roundsStr, 10);
+  if (isNaN(rounds) || rounds < 1) {
+    toast('El número de rondas debe ser al menos 1', 'error');
+    return;
+  }
+  toast(`Iniciando debate con ${rounds} rondas… esto puede tardar un poco ⚡`, 'success');
   try {
     const result = await api('POST', `/platform/round-table/${tableId}/start`, { rounds });
     showDebateResult(result);
