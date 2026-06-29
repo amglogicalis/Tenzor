@@ -23,6 +23,8 @@ from dotenv import load_dotenv
 import getpass
 import threading
 import time
+import random
+
 
 # Asegurar la codificación UTF-8 en la consola para evitar fallos de Unicode en Windows
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
@@ -458,9 +460,320 @@ def cmd_list_models(base_url: str):
                 free_badge = c("(Gratuito)", "green") if item.get("free") else c("(Pago)", "yellow")
                 print(f"    • ID: {c(item['id'], 'cyan'):<45} {item['name']:<40} {free_badge}")
             print()
+            print()
     except Exception as e:
         print(c(f"  ✗ Error al listar modelos: {e}", "red"))
         print()
+
+def cmd_round_table(base_url: str):
+    """Permite administrar e iniciar debates multi-agente en una mesa redonda."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado.", "red"))
+        return
+        
+    print(c("  💬 Arzor Round Table - Debates Multi-Agente 💬", "cyan"))
+    
+    # 1. Recuperar agentes y mesas
+    try:
+        with Spinner("Obteniendo agentes y mesas redondas"):
+            agents_data = api_get("/platform/agents", base_url)
+            tables_data = api_get("/platform/round-table", base_url)
+            
+        agents = agents_data.get("agents", [])
+        tables = tables_data.get("tables", [])
+    except Exception as e:
+        print(c(f"  ✗ Error al conectar con el servidor: {e}", "red"))
+        return
+        
+    if not agents:
+        print(c("  ✗ No tienes agentes configurados en tu cuenta.", "red"))
+        print(c("    Crea al menos 2 agentes para poder iniciar un debate.", "gray"))
+        print()
+        return
+
+    table_id = ""
+    # 2. Elegir mesa existente o crear una nueva
+    if tables:
+        print(c("\n  Tus Mesas Redondas de Debate:", "bold"))
+        for idx, t in enumerate(tables, start=1):
+            print(f"    {idx}. {c(t['name'], 'bold')} | Tema: {c(t['topic'][:60] + '...', 'gray')} | Estado: {t['status'].upper()}")
+        print(f"    N. {c('[Crear Nueva Mesa Redonda]', 'green')}")
+        
+        selection = input(c("\n  Selecciona una mesa o escribe 'N' para crear una: ", "bold")).strip().lower()
+        if selection == 'n' or not selection:
+            table_id = ""
+        else:
+            try:
+                table_idx = int(selection)
+                if 1 <= table_idx <= len(tables):
+                    table_id = tables[table_idx - 1]["id"]
+                else:
+                    print(c("  ✗ Selección no válida.", "red"))
+                    return
+            except ValueError:
+                table_id = ""
+    
+    # 3. Crear mesa redonda si no se seleccionó una existente
+    if not table_id:
+        print(c("\n  ✨ Crear Nueva Mesa de Debate ✨", "cyan"))
+        name = input(c("  Nombre de la mesa: ", "bold")).strip()
+        if not name:
+            print(c("  ✗ El nombre es obligatorio.", "red"))
+            return
+            
+        topic = input(c("  Tema de debate / pregunta a discutir: ", "bold")).strip()
+        if len(topic) < 10:
+            print(c("  ✗ El tema debe tener al menos 10 caracteres.", "red"))
+            return
+            
+        description = input(c("  Descripción (Opcional): ", "bold")).strip()
+        
+        # Crear la mesa en el servidor
+        try:
+            with Spinner("Creando mesa de debate en el servidor"):
+                table = api_post("/platform/round-table", {"name": name, "topic": topic, "description": description or None}, base_url)
+            table_id = table["id"]
+            print(c("  ✔ Mesa creada con éxito.", "green"))
+        except Exception as e:
+            print(c(f"  ✗ Error al crear la mesa: {e}", "red"))
+            return
+            
+        # Añadir agentes miembros
+        print(c("\n  Tus Agentes Disponibles:", "bold"))
+        for idx, a in enumerate(agents, start=1):
+            print(f"    {idx}. {c(a['name'], 'bold')} [{a.get('category','custom').upper()}]")
+            
+        member_input = input(c("\n  Selecciona los agentes que debatirán (mínimo 2, separados por comas): ", "bold")).strip()
+        member_indices = [int(i.strip()) for i in member_input.split(",") if i.strip().isdigit()]
+        
+        if len(member_indices) < 2:
+            print(c("  ✗ Debes seleccionar al menos 2 agentes para el debate.", "red"))
+            return
+            
+        # Añadir miembros en orden de turno
+        try:
+            for idx, a_idx in enumerate(member_indices, start=1):
+                if 1 <= a_idx <= len(agents):
+                    agent_to_add = agents[a_idx - 1]
+                    with Spinner(f"Añadiendo a {agent_to_add['name']} a la mesa"):
+                        api_post(f"/platform/round-table/{table_id}/members", {"agent_id": agent_to_add["id"], "turn_order": idx}, base_url)
+                else:
+                    print(c(f"  ✗ Índice de agente {a_idx} no válido. Omitiendo.", "yellow"))
+        except Exception as e:
+            print(c(f"  ✗ Error al añadir agentes a la mesa: {e}", "red"))
+            return
+            
+    # 4. Iniciar el debate
+    rounds_input = input(c("\n  Número de rondas de debate (1-3) [default: 2]: ", "bold")).strip()
+    rounds = 2
+    if rounds_input.isdigit() and 1 <= int(rounds_input) <= 3:
+        rounds = int(rounds_input)
+        
+    print()
+    try:
+        with Spinner("Los agentes están debatiendo en la mesa redonda (esto puede demorar unos segundos)"):
+            result = api_post(f"/platform/round-table/{table_id}/start", {"rounds": rounds}, base_url)
+    except Exception as e:
+        print(c(f"  ✗ Error en el debate: {e}", "red"))
+        return
+        
+    # 5. Imprimir los resultados
+    print(c("  ════════════════════════════════════════════════════════════", "gray"))
+    print(c(f"  📢 DEBATE: {result.get('topic')}", "bold"))
+    print(c("  ════════════════════════════════════════════════════════════", "gray"))
+    print()
+    
+    turns = result.get("turns", [])
+    agent_colors = {}
+    available_colors = ["cyan", "green", "yellow", "purple", "white"]
+    
+    for turn in turns:
+        agent_name = turn.get("agent_name", "Agente")
+        if agent_name not in agent_colors:
+            # Asignar un color único a cada agente
+            agent_colors[agent_name] = available_colors[len(agent_colors) % len(available_colors)]
+            
+        color = agent_colors[agent_name]
+        print(c(f"  [💬 {agent_name} ({turn.get('provider')}/{turn.get('model')}) - Ronda {turn.get('round')}]", color))
+        print(textwrap.indent(turn.get("content", ""), "     "))
+        print()
+        
+    synthesis = result.get("synthesis", "")
+    if synthesis:
+        print(c("  ════════════════════════════════════════════════════════════", "gray"))
+        print(c("  ⚖️ SÍNTESIS Y CONCLUSIÓN FINAL (Moderador)", "bold"))
+        print(c("  ════════════════════════════════════════════════════════════", "gray"))
+        print()
+        print(textwrap.indent(synthesis, "     "))
+        print()
+
+def cmd_team_collaboration(task_str: str, agent_names_or_ids: str, base_url: str, auto_confirm: bool):
+    """Coordina un equipo de agentes locales para resolver una tarea secuencial en cascada."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado.", "red"))
+        return
+        
+    print(c("  👥 Arzor Teams - Colaboración de Agentes locales 👥", "cyan"))
+    
+    # 1. Recuperar agentes disponibles
+    try:
+        with Spinner("Obteniendo agentes del servidor"):
+            data = api_get("/platform/agents", base_url)
+        agents = data.get("agents", [])
+    except Exception as e:
+        print(c(f"  ✗ Error al obtener agentes: {e}", "red"))
+        return
+        
+    if not agents:
+        print(c("  ✗ No tienes agentes configurados en tu cuenta.", "red"))
+        print(c("    Crea agentes especializados antes de lanzar un equipo.", "gray"))
+        print()
+        return
+
+    selected_agents = []
+    # 2. Si no se pasaron agentes, pedirlos de forma interactiva
+    if not agent_names_or_ids:
+        print(c("\n  Agentes Disponibles para tu Equipo:", "bold"))
+        for idx, a in enumerate(agents, start=1):
+            print(f"    {idx}. {c(a['name'], 'bold')} | Categoría: {a.get('category','custom').upper()} | Descripción: {a.get('description','')[:50]}")
+            
+        selection = input(c("\n  Selecciona los miembros de tu equipo (números separados por comas): ", "bold")).strip()
+        indices = [int(i.strip()) for i in selection.split(",") if i.strip().isdigit()]
+        for idx in indices:
+            if 1 <= idx <= len(agents):
+                selected_agents.append(agents[idx - 1])
+    else:
+        # Resolver los agentes pasados por comas
+        names_list = [n.strip() for n in agent_names_or_ids.split(",") if n.strip()]
+        for name in names_list:
+            resolved_id = resolve_agent_id(name, base_url)
+            # Buscar el objeto agente completo
+            found = False
+            for a in agents:
+                if a["id"] == resolved_id:
+                    selected_agents.append(a)
+                    found = True
+                    break
+            if not found:
+                print(c(f"  ✗ No se pudo encontrar al agente: '{name}'. Omitiendo.", "yellow"))
+
+    if len(selected_agents) < 2:
+        print(c("  ✗ Se requieren al menos 2 agentes válidos en el equipo para colaborar.", "red"))
+        return
+
+    print(c("\n  Miembros del equipo local configurados:", "bold"))
+    for idx, a in enumerate(selected_agents, start=1):
+        print(f"    • {c(a['name'], 'green')} ({a['id']})")
+
+    # 3. Generar el Plan con el Coordinador del Equipo
+    print(c("\n  🚀 Diseñando el plan de trabajo con el Coordinador de Equipo...", "cyan"))
+    
+    # Componer una descripción detallada de las habilidades de cada agente
+    skills_context = ""
+    for a in selected_agents:
+        skills_context += f"- Agente: '{a['name']}' (UUID: {a['id']})\n  Instrucciones/Habilidades: {a['system_instructions'][:200]}\n"
+        
+    coordinator_prompt = f"""
+Actúa como un Director de Proyecto / Coordinador técnico de desarrollo de software.
+Tu objetivo es recibir una tarea general y la lista de agentes especializados disponibles, y diseñar un plan secuencial paso a paso (desglose de subtareas) para resolver la tarea trabajando colaborativamente sobre los archivos de la máquina local.
+
+Lista de agentes especializados disponibles:
+{skills_context}
+
+Tarea general a resolver en la máquina local:
+"{task_str}"
+
+Diseña un plan secuencial ordenado. Cada paso del plan debe ser ejecutado por uno de los agentes disponibles en base a su especialización. El resultado de un paso servirá de base para el siguiente agente.
+Devuelve tu respuesta únicamente en formato JSON válido con la siguiente estructura, sin textos explicativos ni antes ni después del bloque de código.
+
+Estructura requerida:
+{{
+  "plan": [
+    {{
+      "step": 1,
+      "agent_id": "UUID_DE_UN_AGENTE_DISPONIBLE",
+      "agent_name": "Nombre exacto del agente",
+      "subtask": "Prompt/Instrucciones específicas, detalladas e individuales para que este agente ejecute su paso autónomo ReAct en local."
+    }}
+  ]
+}}
+"""
+    try:
+        # Llamar al endpoint del backend como un paso único ReAct de razonamiento
+        with Spinner("Analizando tarea y estructurando plan de pasos"):
+            result = call_agent_step(
+                messages=[{"role": "user", "content": coordinator_prompt}],
+                base_url=base_url,
+                tier="balanced"
+            )
+            
+        content = result.get("content", "")
+        # Extraer el bloque JSON de la respuesta
+        import re
+        json_match = re.search(r"```json\s*(.*?)\s*```", content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1).strip()
+        else:
+            # Intentar parsear el contenido crudo
+            json_str = content.strip()
+            
+        plan_data = json.loads(json_str)
+        plan = plan_data.get("plan", [])
+    except Exception as e:
+        print(c(f"  ✗ Error al diseñar el plan con el Coordinador: {e}", "red"))
+        print(c(f"    Respuesta cruda del servidor: {content[:400]}...", "gray"))
+        return
+
+    if not plan:
+        print(c("  ✗ El Coordinador no pudo generar un plan de subtareas válido.", "red"))
+        return
+
+    print(c("\n  📋 Plan de Trabajo Diseñado por el Coordinador:", "bold"))
+    for p in plan:
+        print(f"    Paso {p['step']}. {c('[' + p['agent_name'] + ']', 'cyan')} -> {p['subtask']}")
+
+    # 4. Confirmar ejecución
+    print()
+    confirm = "y"
+    if not auto_confirm:
+        confirm = input(c("  ¿Deseas iniciar la ejecución en cascada de este plan? [Y/n]: ", "bold")).strip().lower()
+        if not confirm:
+            confirm = "y"
+            
+    if confirm != "y":
+        print(c("  ✗ Plan cancelado por el usuario.", "red"))
+        return
+
+    # 5. Ejecutar pasos en cascada
+    print(c("\n  🚀 Iniciando ejecución de tareas colaborativas en cascada...\n", "cyan"))
+    
+    for p in plan:
+        print(c(f"  [Paso {p['step']}/{len(plan)}] Activando a {p['agent_name']}...", "bold"))
+        print(c(f"  Instrucción: {p['subtask']}", "gray"))
+        print()
+        
+        # Ejecutar el bucle local de ReAct para este agente con su subtarea
+        try:
+            run_agent_loop(
+                task=p['subtask'],
+                tier="balanced",
+                auto_confirm=auto_confirm,
+                agent_id=p['agent_id'],
+                base_url=base_url
+            )
+            print(c(f"  ✔ Paso {p['step']} completado por {p['agent_name']}.\n", "green"))
+        except Exception as e:
+            print(c(f"  ✗ Error en la ejecución del Paso {p['step']} por {p['agent_name']}: {e}", "red"))
+            cont = input(c("  ¿Deseas continuar con el siguiente paso del plan de todas formas? [y/N]: ", "bold")).strip().lower()
+            if cont != "y":
+                print(c("  ✗ Ejecución del equipo abortada por el usuario.", "red"))
+                return
+                
+    print(c("  ✅ ¡El equipo de desarrollo ha completado satisfactoriamente el plan de trabajo! ✅", "green"))
+    print()
+
 
 def cmd_create_agent_interactive(base_url: str):
     """Guía interactiva paso a paso para crear un agente desde la consola."""
@@ -695,7 +1008,7 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
 
 def main():
     # Comprobar si se llama a un comando especial o a una tarea directa
-    special_commands = {"list-agents", "create-agent", "list-models", "login"}
+    special_commands = {"list-agents", "create-agent", "list-models", "login", "round-table", "debate", "team"}
     
     # Manejar compatibilidad ergonómica directa
     is_special = len(sys.argv) > 1 and sys.argv[1] in special_commands
@@ -710,6 +1023,8 @@ def main():
           python cli/arzor.py list-agents    → Lista todos tus agentes personalizados
           python cli/arzor.py create-agent   → Asistente por pasos para crear un agente
           python cli/arzor.py list-models    → Muestra todos tus modelos de IA activos
+          python cli/arzor.py debate         → Inicia debates en mesa redonda entre tus agentes
+          python cli/arzor.py team [tarea]   → Ejecuta tareas complejas con un equipo de agentes locales
           
         Ejemplos de ejecución de tareas:
           python cli/arzor.py "Crea un servidor Flask en app.py"
@@ -725,6 +1040,13 @@ def main():
         subparsers.add_parser("create-agent", help="Iniciar asistente interactivo de creación de agentes")
         subparsers.add_parser("list-models", help="Listar todos los modelos de IA activos en tu cuenta")
         subparsers.add_parser("login", help="Iniciar sesión en la plataforma y configurar credenciales locales")
+        subparsers.add_parser("round-table", help="Administrar e iniciar debates interactivos de mesas redondas")
+        subparsers.add_parser("debate", help="Alias de round-table")
+        
+        team_parser = subparsers.add_parser("team", help="Ejecutar tareas locales secuenciales coordinadas por un equipo")
+        team_parser.add_argument("task", nargs="+", help="Descripción de la tarea general a resolver")
+        team_parser.add_argument("--agents", default="", help="Nombres o UUIDs de los agentes del equipo separados por comas")
+        team_parser.add_argument("-y", "--yes", action="store_true", dest="auto_confirm", help="Modo automático: confirma herramientas sin preguntar")
         
         # Argumentos compartidos globales de conexión
         parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
@@ -738,6 +1060,11 @@ def main():
             cmd_create_agent_interactive(args.url)
         elif args.command == "login":
             cmd_login(args.url)
+        elif args.command in ("round-table", "debate"):
+            cmd_round_table(args.url)
+        elif args.command == "team":
+            cmd_team_collaboration(" ".join(args.task), args.agents, args.url, args.auto_confirm)
+
 
             
     else:

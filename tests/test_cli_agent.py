@@ -129,4 +129,27 @@ def test_is_coding_model_filter():
     assert is_coding_model("llama-3-8b", "watsonx") is False
     assert is_coding_model("gemma-2b", "groq") is False
 
+def test_cli_subparsers_registration():
+    from unittest.mock import ANY
+    with patch("sys.argv", ["arzor", "debate"]), \
+         patch("cli.arzor.cmd_round_table") as mock_rt:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_rt.assert_called_once()
+
+def test_cli_team_registration():
+    from unittest.mock import ANY
+    with patch("sys.argv", ["arzor", "team", "Crea", "un", "archivo", "--agents", "Backend"]), \
+         patch("cli.arzor.cmd_team_collaboration") as mock_team:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_team.assert_called_once_with("Crea un archivo", "Backend", ANY, ANY)
+
+
 

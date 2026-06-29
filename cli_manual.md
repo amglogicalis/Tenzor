@@ -100,6 +100,23 @@ Consulta al servidor y lista los modelos de IA activos para tu cuenta en base a 
 arzor list-models
 ```
 
+### 4. Debates Multi-Agente (`debate` / `round-table`)
+Inicia discusiones y debates síncronos en tiempo real entre múltiples agentes de tu cuenta sobre cualquier pregunta técnica o de arquitectura:
+```bash
+arzor debate
+```
+* **Asistente interactivo**: Permite elegir una mesa redonda existente o crear una nueva (Nombre, Tema, Rondas) seleccionando de 2 a 5 agentes participantes.
+* **Chat animado con colores**: Pinta las intervenciones de cada agente miembro en formato chat coloreado y finaliza imprimiendo una síntesis/conclusión escrita por el moderador de la mesa redonda.
+
+### 5. Colaboración en Equipos Locales (`team`)
+Ejecuta tareas complejas dividiéndolas en subtareas y coordinando secuencialmente a un equipo de tus agentes en tu máquina local:
+```bash
+arzor team "Diseña un CRUD de usuarios, escribe la API y realiza tests en pytest" --agents "Dev DB, Dev Backend, Dev Tester"
+```
+* **Coordinación Inteligente**: Un agente Coordinador del sistema analiza la tarea y las habilidades de tus agentes y diseña un plan secuencial de subtareas.
+* **Cascada local autónoma**: Ejecuta de forma secuencial cada subtarea llamando al agente asignado en tu máquina de desarrollo. Cada agente trabaja directamente sobre el código local construido por el agente anterior, completando el ciclo colaborativo.
+
+
 ---
 
 ## 🤖 Ejecución de Tareas Autónomas (Bucle ReAct)
