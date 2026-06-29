@@ -294,7 +294,10 @@ class DevCrewService:
             raise ValueError("El historial de mensajes no puede estar vacío.")
 
         instructions = self._load_agent_instructions(agent_id, user_id) if agent_id else None
-        system_prompt = instructions or _REACT_SYSTEM
+        if instructions:
+            system_prompt = f"{_REACT_SYSTEM}\n\nINSTRUCCIONES ADICIONALES DE ESPECIALIZACIÓN DEL AGENTE:\n{instructions}"
+        else:
+            system_prompt = _REACT_SYSTEM
 
         try:
             result = provider_router.infer(
@@ -362,21 +365,21 @@ class DevCrewService:
     def _parse_json_response(self, content: str) -> dict:
         """
         Extrae y parsea el JSON de la respuesta del LLM.
-        El LLM puede añadir markdown code fences (```json ... ```) — las limpiamos.
         """
         import json
         import re
+        
+        # Limpiar triple backticks
         cleaned = content.strip()
-        # Eliminar code fences si existen
-        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned, re.DOTALL)
-        if match:
-            cleaned = match.group(1)
-        else:
-            # Buscar el primer { y el último }
-            start = cleaned.find('{')
-            end = cleaned.rfind('}')
-            if start != -1 and end != -1:
-                cleaned = cleaned[start:end+1]
+        cleaned = re.sub(r'^```(?:json)?', '', cleaned)
+        cleaned = re.sub(r'```$', '', cleaned).strip()
+        
+        # Encontrar el primer { y el último }
+        start = cleaned.find('{')
+        end = cleaned.rfind('}')
+        if start != -1 and end != -1:
+            cleaned = cleaned[start:end+1]
+            
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
