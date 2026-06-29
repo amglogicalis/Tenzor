@@ -962,14 +962,6 @@
         <label class="form-label">Tema del debate</label>
         <textarea id="rt-topic" rows="3" placeholder="¿Cuál es la pregunta o tema que los agentes debatirán?"></textarea>
       </div>
-      <div class="form-group">
-        <label class="form-label">Rondas</label>
-        <select id="rt-rounds">
-          <option value="1" selected>1 ronda</option>
-          <option value="2">2 rondas</option>
-          <option value="3">3 rondas</option>
-        </select>
-      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-create-table')">Cancelar</button>
@@ -1529,9 +1521,15 @@ async function loadRoundTables() {
             <div style="font-size:12px;color:var(--text-3)">${esc(t.topic?.slice(0,80) || '')}…</div>
           </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span class="badge ${t.status==='done'?'badge-green':t.status==='running'?'badge-amber':'badge-cyan'}">${t.status}</span>
-          ${t.status==='idle' ? `<button class="btn btn-sm btn-purple" onclick="event.stopPropagation();startDebate('${t.id}')">▶ Iniciar</button>` : ''}
+          ${t.status==='idle' ? `
+            <div style="display:flex;align-items:center;gap:6px" onclick="event.stopPropagation()">
+              <input type="number" id="rounds-${t.id}" value="3" min="1" max="9999" 
+                     style="width:70px;padding:4px 6px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-1)" />
+              <button class="btn btn-sm btn-purple" onclick="startDebate('${t.id}')">▶ Iniciar</button>
+            </div>
+          ` : ''}
           ${t.status==='done' ? `<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();viewResult('${t.id}')">Ver resultado</button>` : ''}
         </div>
       </div>
@@ -1556,11 +1554,13 @@ async function createTable() {
 }
 
 async function startDebate(tableId) {
-  const roundsStr = prompt("¿Cuántas rondas de debate deseas ejecutar? (Mínimo 1, máximo 9999)", "3");
-  if (roundsStr === null) return; // cancelado
-  const rounds = parseInt(roundsStr, 10);
-  if (isNaN(rounds) || rounds < 1) {
-    toast('El número de rondas debe ser al menos 1', 'error');
+  const inputEl = document.getElementById(`rounds-${tableId}`);
+  let rounds = 3;
+  if (inputEl) {
+    rounds = parseInt(inputEl.value, 10);
+  }
+  if (isNaN(rounds) || rounds < 1 || rounds > 9999) {
+    toast('El número de rondas debe estar entre 1 y 9999', 'error');
     return;
   }
   toast(`Iniciando debate con ${rounds} rondas… esto puede tardar un poco ⚡`, 'success');
