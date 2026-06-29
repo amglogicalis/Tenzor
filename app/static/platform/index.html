@@ -1412,8 +1412,8 @@ async function showApp() {
   // Renderizado defensivo inmediato con los datos locales guardados (evita mostrar "Usuario" por defecto)
   const localUser = state.user;
   if (localUser) {
-    document.getElementById('top-avatar').textContent = (localUser.username || 'U')[0].toUpperCase();
-    document.getElementById('top-username').textContent = localUser.display_name || localUser.username || 'Usuario';
+    document.getElementById('top-avatar').textContent = (localUser.display_name || localUser.username || 'U')[0].toUpperCase();
+    document.getElementById('top-username').textContent = localUser.username || localUser.display_name || 'Usuario';
     document.getElementById('dash-greeting').textContent = `Bienvenido de vuelta, ${localUser.display_name || localUser.username} 👋`;
   }
   
@@ -1429,8 +1429,8 @@ async function showApp() {
       };
       localStorage.setItem('arzor_user', JSON.stringify(state.user));
       
-      document.getElementById('top-avatar').textContent = (profile.username || 'U')[0].toUpperCase();
-      document.getElementById('top-username').textContent = profile.display_name || profile.username || 'Usuario';
+      document.getElementById('top-avatar').textContent = (profile.display_name || profile.username || 'U')[0].toUpperCase();
+      document.getElementById('top-username').textContent = profile.username || profile.display_name || 'Usuario';
       document.getElementById('dash-greeting').textContent = `Bienvenido de vuelta, ${profile.display_name || profile.username} 👋`;
       
       // Comprobar si necesita Onboarding
