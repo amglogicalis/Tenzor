@@ -83,16 +83,18 @@ arzor list-agents
 ```
 
 ### 2. Crear un Agente Nuevo (Asistente Interactivo)
-Inicia un asistente interactivo paso a paso por consola (`[1/7]...[7/7]`) para registrar un nuevo agente autónomo en tu cuenta:
+Inicia un asistente interactivo por consola en **6 pasos** para registrar un nuevo agente en tu cuenta, seleccionando dinámicamente tu proveedor e IA de una lista numerada:
 ```bash
 arzor create-agent
 ```
-El asistente te guiará para definir:
+El asistente te guiará de forma estructurada:
 * **Nombre** y **Descripción**.
-* **Categoría** (dev, ops, data, science, creative).
-* **Tier de Calidad** (fast, balanced, pro).
-* **Proveedor e IA preferida** (Gemini, Groq, DeepSeek, etc.).
-* **Instrucciones de Sistema** (reglas y personalidad del agente).
+* **Categoría** (dev, ops, data, science, creative, custom).
+* **Selección de Proveedor**: Escoge el proveedor (Google, Groq, DeepSeek, Anthropic, etc.) desde una lista numerada.
+* **Selección de Modelo**: Muestra en tiempo real la lista numerada de modelos de codificación activos en tu cuenta para ese proveedor para que elijas uno al instante.
+* **Instrucciones de Sistema**: Define las reglas de comportamiento y la personalidad del agente.
+*(El nivel de Tier se calcula automáticamente en base al modelo elegido, facilitando la configuración).*
+
 
 ### 3. Listar Modelos de Programación Disponibles
 Consulta al servidor y lista los modelos de IA activos para tu cuenta en base a tus API Keys, **filtrando exclusivamente** aquellos aptos para programación y desarrollo (oculta modelos conversacionales genéricos):

@@ -785,14 +785,39 @@ def cmd_create_agent_interactive(base_url: str):
     print(c("  ✨ Creación interactiva de nuevo Agente Personalizado ✨", "cyan"))
     print(c("  Responde a los siguientes pasos (Presiona Ctrl+C para cancelar):\n", "gray"))
     
+    # Modelos de fallback estáticos por si falla la API
+    fallback_models = [
+        {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash", "provider": "google"},
+        {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro", "provider": "google"},
+        {"id": "claude-3-5-sonnet-latest", "name": "Claude 3.5 Sonnet", "provider": "anthropic"},
+        {"id": "claude-3-5-haiku-latest", "name": "Claude 3.5 Haiku", "provider": "anthropic"},
+        {"id": "deepseek-coder", "name": "DeepSeek Coder", "provider": "deepseek"},
+        {"id": "deepseek-reasoner", "name": "DeepSeek R1 / Reasoner", "provider": "deepseek"},
+        {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B", "provider": "groq"},
+        {"id": "mixtral-8x7b-32768", "name": "Mixtral 8x7B", "provider": "groq"},
+        {"id": "codestral-latest", "name": "Codestral", "provider": "mistral"},
+        {"id": "mistral-large-latest", "name": "Mistral Large", "provider": "mistral"},
+        {"id": "meta-llama/llama-3.3-70b-instruct", "name": "Llama 3.3 70B (OpenRouter)", "provider": "openrouter"},
+        {"id": "deepseek/deepseek-r1", "name": "DeepSeek R1 (OpenRouter)", "provider": "openrouter"}
+    ]
+    
     try:
+        # Obtener modelos disponibles del servidor
+        try:
+            with Spinner("Obteniendo catálogo de modelos disponibles"):
+                models = api_get("/platform/keys/models/available", base_url)
+            if not models:
+                models = fallback_models
+        except Exception:
+            models = fallback_models
+            
         # 1. Nombre
         name = ""
         while len(name.strip()) < 2:
-            name = input(c("  [1/7] Nombre del Agente (mínimo 2 letras): ", "bold")).strip()
+            name = input(c("  [1/6] Nombre del Agente (mínimo 2 letras): ", "bold")).strip()
             
         # 2. Descripción
-        description = input(c("  [2/7] Descripción / Rol del Agente: ", "bold")).strip()
+        description = input(c("  [2/6] Descripción / Rol del Agente: ", "bold")).strip()
         
         # 3. Categoría
         categories = ["dev", "ops", "data", "science", "creative", "custom"]
@@ -802,7 +827,7 @@ def cmd_create_agent_interactive(base_url: str):
         cat_idx = 0
         while cat_idx < 1 or cat_idx > len(categories):
             try:
-                cat_input = input(c("  [3/7] Selecciona el número de la categoría [default: 1]: ", "bold")).strip()
+                cat_input = input(c("  [3/6] Selecciona el número de la categoría [default: 1]: ", "bold")).strip()
                 if not cat_input:
                     cat_idx = 1
                 else:
@@ -811,40 +836,58 @@ def cmd_create_agent_interactive(base_url: str):
                 pass
         category = categories[cat_idx - 1]
         
-        # 4. Tier
-        tiers = ["balanced", "pro", "fast"]
-        print(c("\n  Tiers de Calidad / Velocidad:", "gray"))
-        for i, t in enumerate(tiers, start=1):
-            print(f"    {i}. {t}")
-        tier_idx = 0
-        while tier_idx < 1 or tier_idx > len(tiers):
+        # 4. Proveedor
+        # Extraer proveedores únicos de la lista de modelos
+        providers = sorted(list(set(m.get("provider", "other") for m in models)))
+        print(c("\n  Proveedores disponibles en tu cuenta:", "gray"))
+        for i, prov in enumerate(providers, start=1):
+            print(f"    {i}. {prov.upper()}")
+        prov_idx = 0
+        while prov_idx < 1 or prov_idx > len(providers):
             try:
-                tier_input = input(c("  [4/7] Selecciona el número de Tier [default: 1]: ", "bold")).strip()
-                if not tier_input:
-                    tier_idx = 1
+                prov_input = input(c("  [4/6] Selecciona el número de proveedor [default: 1]: ", "bold")).strip()
+                if not prov_input:
+                    prov_idx = 1
                 else:
-                    tier_idx = int(tier_input)
+                    prov_idx = int(prov_input)
             except ValueError:
                 pass
-        base_tier = tiers[tier_idx - 1]
+        preferred_provider = providers[prov_idx - 1]
         
-        # 5. Proveedor
-        print(c("\n  Proveedores soportados (google, groq, openrouter, deepseek, cohere, etc.):", "gray"))
-        preferred_provider = input(c("  [5/7] Proveedor preferido (Opcional, Enter para omitir): ", "bold")).strip().lower()
-        if not preferred_provider:
-            preferred_provider = None
+        # 5. Modelo
+        # Filtrar modelos por el proveedor elegido
+        filtered_models = [m for m in models if m.get("provider") == preferred_provider]
+        print(c(f"\n  Modelos de {preferred_provider.upper()} disponibles:", "gray"))
+        for i, m in enumerate(filtered_models, start=1):
+            print(f"    {i}. {m.get('name') or m.get('id')}")
+        model_idx = 0
+        while model_idx < 1 or model_idx > len(filtered_models):
+            try:
+                model_input = input(c("  [5/6] Selecciona el número del modelo [default: 1]: ", "bold")).strip()
+                if not model_input:
+                    model_idx = 1
+                else:
+                    model_idx = int(model_input)
+            except ValueError:
+                pass
+        chosen_model = filtered_models[model_idx - 1]
+        preferred_model = chosen_model["id"]
+        
+        # Calcular el base_tier de forma automática a partir del ID del modelo
+        model_lower = preferred_model.lower()
+        if any(w in model_lower for w in ["flash", "instant", "haiku", "speed", "fast"]):
+            base_tier = "fast"
+        elif any(w in model_lower for w in ["pro", "large", "reasoner", "ultra", "opus", "r1", "o1", "o3"]):
+            base_tier = "pro"
+        else:
+            base_tier = "balanced"
             
-        # 6. Modelo
-        preferred_model = input(c("  [6/7] Modelo preferido (Opcional, Enter para omitir): ", "bold")).strip()
-        if not preferred_model:
-            preferred_model = None
-            
-        # 7. Instrucciones
+        # 6. Instrucciones
         print(c("\n  Escribe las instrucciones de comportamiento (personality/reglas) para el agente.", "gray"))
-        print(c("  (Ingresa una sola línea o pulsa enter si es corta. Mínimo 20 caracteres)", "gray"))
+        print(c("  (Mínimo 20 caracteres)", "gray"))
         system_instructions = ""
         while len(system_instructions.strip()) < 20:
-            system_instructions = input(c("  [7/7] Instrucciones del sistema: ", "bold")).strip()
+            system_instructions = input(c("  [6/6] Instrucciones del sistema: ", "bold")).strip()
             if len(system_instructions.strip()) < 20:
                 print(c("  ✗ Las instrucciones deben tener al menos 20 caracteres.", "yellow"))
                 
