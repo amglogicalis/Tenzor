@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arzor"
+version = "1.0.0"
+description = "Arzor AIs CLI Agent — Asistente de Desarrollo Autónomo local"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.1",
+]
+
+[project.scripts]
+arzor = "cli.arzor:main"
+
+[tool.setuptools]
+packages = ["cli"]
+

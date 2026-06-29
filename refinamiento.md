@@ -19,6 +19,7 @@ Una vez los tengamos el usuario al mostrar sus modelos disponibles hara un filtr
 4. Crear un manual de comandos para entenderlo
 
 5. Crear un set-up comando para linux y windows que instale todas las dependencias y prepare el entorno una vez los usuarios se traigan a su pc el repo, y puedan uasr ya el cli sin problemas. Podemos usarlo tambien como onboarding de que debe configurar el user (en su .env) para usar el cli correctamente
+Este instala tambien python si no existe y demas, asegurate de que instale todo lo que pueda ser necesario.
 
 6. Por ultimo añadiremos al funcion round table para que los agentes puedan discutir que hacer con tu consulta desde el pc. Y añadir la funcion exclusiva team para el cli, que permitira lanzar tareas de forma simultanea con distintos agentes sin conflictos (incluso permitiendo la comunicacion entre agentes) para ir haciendo cada uno una tarea como si fuera un equipo real en el pc
 

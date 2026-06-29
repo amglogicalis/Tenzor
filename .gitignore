@@ -19,3 +19,6 @@ docs_traning/
 tenzor_nova_training_plan.md
 plan.txt
 respuesta.md
+*.egg-info/
+build/
+dist/
