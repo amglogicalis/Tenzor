@@ -396,7 +396,7 @@ class TestRoundTableEndpoints:
         assert resp.json()["synthesis"] == "Síntesis generada."
 
     def test_start_debate_invalid_rounds(self):
-        resp = client.post("/platform/round-table/table-1/start", json={"rounds": 10})
+        resp = client.post("/platform/round-table/table-1/start", json={"rounds": 10000})
         assert resp.status_code == 422
 
     def test_start_debate_table_not_found(self):
