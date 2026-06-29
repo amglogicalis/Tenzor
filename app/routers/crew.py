@@ -69,6 +69,22 @@ class WriteRequest(BaseModel):
     )
 
 
+class AgentStepMessage(BaseModel):
+    role: str = Field(..., description="Rol en el chat: user o assistant")
+    content: str = Field(..., description="Contenido del mensaje")
+
+
+class AgentStepRequest(BaseModel):
+    messages: List[AgentStepMessage] = Field(..., description="Historial de mensajes de la conversación ReAct")
+    tier: str = Field(
+        "balanced",
+        pattern=r"^(fast|balanced|pro)$",
+        description="Tier del provider"
+    )
+    agent_id: Optional[str] = Field(None, description="UUID del agente a usar (opcional)")
+
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post(
@@ -137,3 +153,38 @@ def generate_code(
             detail="Error interno al generar el código."
         )
     return result
+
+
+@router.post(
+    "/agent-step",
+    summary="Obtener el siguiente paso del agente ReAct local",
+    description=(
+        "Recibe el historial de la conversación del agente autónomo local, "
+        "aplica el prompt de sistema del agente ReAct y devuelve el pensamiento y "
+        "acción de la herramienta en formato estructurado."
+    ),
+    status_code=status.HTTP_200_OK,
+)
+def generate_agent_step(
+    req: AgentStepRequest,
+    user: dict = Depends(require_platform_user),
+):
+    try:
+        # Convertir mensajes de Pydantic a lista de dicts
+        msg_dicts = [{"role": m.role, "content": m.content} for m in req.messages]
+        result = _crew.agent_step(
+            user_id=user["user_id"],
+            messages=msg_dicts,
+            tier=req.tier,
+            agent_id=req.agent_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"DevCrew /agent-step error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno en el agente autónomo."
+        )
+    return result
+

@@ -108,6 +108,39 @@ Genera el código en este formato JSON exacto:
 """
 
 
+_REACT_SYSTEM = """\
+Eres Arzor Agent, un desarrollador autónomo senior. Estás ejecutando tareas de desarrollo directamente en el ordenador local del usuario.
+Tu objetivo es completar la tarea del usuario utilizando las herramientas locales que se te proporcionan.
+
+Reglas críticas de comportamiento:
+1. Analiza con cuidado el directorio antes de escribir código o tomar decisiones. Utiliza list_directory o read_file_content si necesitas entender el contexto.
+2. Si creas o modificas código, escribe código funcional, completo y real (no placeholders ni comentarios de "escribir aquí").
+3. Tras realizar cambios, intenta siempre ejecutar tests o comandos de validación (por ejemplo, execute_system_command con "pytest" o similar) para verificar tu trabajo.
+4. Si un comando o test falla, lee el error de stdout/stderr y corrígelo de inmediato.
+5. Cuando la tarea esté totalmente finalizada y verificada, responde con action = "finish".
+
+Debes responder ÚNICAMENTE en el siguiente formato JSON, sin añadir texto libre antes ni después:
+{{
+  "thought": "Tu razonamiento paso a paso sobre el estado actual y lo que planeas hacer a continuación.",
+  "action": "list_directory | read_file_content | write_file_content | edit_file_content | execute_system_command | finish",
+  "args": {{
+    // Si la acción es list_directory:
+    //   "path": "ruta/al/directorio" (opcional, por defecto ".")
+    // Si la acción es read_file_content:
+    //   "path": "ruta/al/archivo"
+    // Si la acción es write_file_content:
+    //   "path": "ruta/al/archivo", "content": "contenido completo del archivo"
+    // Si la acción es edit_file_content:
+    //   "path": "ruta/al/archivo", "target_text": "texto exacto a reemplazar", "replacement_text": "nuevo texto"
+    // Si la acción es execute_system_command:
+    //   "command": "comando de consola a ejecutar"
+    // Si la acción es finish:
+    //   "message": "Resumen final detallado del trabajo realizado"
+  }}
+}}
+"""
+
+
 class DevCrewService:
     """Orquestador DevCrew: plan y generación de código asistido por IA."""
 
@@ -244,6 +277,55 @@ class DevCrewService:
             return code_result
         except InferenceError as e:
             raise ValueError(f"Error al generar el código: {e}")
+
+    def agent_step(
+        self,
+        user_id: str,
+        messages: List[dict],
+        tier: str = "balanced",
+        agent_id: Optional[str] = None,
+    ) -> dict:
+        """
+        Recibe el historial de la conversación del agente autónomo local,
+        aplica el prompt de sistema del agente ReAct y devuelve el pensamiento
+        y acción de la herramienta en formato estructurado.
+        """
+        if not messages:
+            raise ValueError("El historial de mensajes no puede estar vacío.")
+
+        instructions = self._load_agent_instructions(agent_id, user_id) if agent_id else None
+        system_prompt = instructions or _REACT_SYSTEM
+
+        try:
+            result = provider_router.infer(
+                messages=messages,
+                tier=tier,
+                user_id=user_id,
+                system_prompt=system_prompt,
+                temperature=0.2,   # baja temperatura para consistencia de JSON
+                max_tokens=3000,
+            )
+            
+            step_result = self._parse_json_response(result.content)
+            # Asegurar estructura mínima si el parser falló
+            if "error" in step_result and "raw_response" in step_result:
+                # Si falló el JSON, intentamos forzar un finish con la respuesta cruda para no colgar el cliente
+                step_result = {
+                    "thought": "Error de parseo JSON del LLM.",
+                    "action": "finish",
+                    "args": {"message": step_result["raw_response"]}
+                }
+            
+            step_result["_meta"] = {
+                "provider": result.provider,
+                "model": result.model,
+                "tokens_in": result.tokens_in,
+                "tokens_out": result.tokens_out,
+                "latency_ms": result.latency_ms,
+            }
+            return step_result
+        except InferenceError as e:
+            raise ValueError(f"Error de inferencia en el agente: {e}")
 
     # ──────────────────────────────────────────────────────────────────────────
     # HELPERS
