@@ -714,18 +714,30 @@ async def _fetch_openrouter_models() -> List[Dict[str, Any]]:
                 data = resp.json().get("data", [])
                 models = []
                 for m in data:
-                    model_id = m.get("id")
-                    # Filtrar sólo los modelos gratuitos de OpenRouter por ahora para el pool free
-                    # o incluir de pago también para que los BYOK puedan seleccionarlos
-                    is_free = ":free" in model_id or m.get("pricing", {}).get("prompt") == "0"
-                    models.append({
-                        "id": model_id,
-                        "name": f"{m.get('name')} (OpenRouter)",
-                        "provider": "openrouter",
-                        "free": is_free
-                    })
-                # Ordenar para que los gratuitos salgan primero
-                models.sort(key=lambda x: not x["free"])
+                    model_id = m.get("id") or ""
+                    pricing = m.get("pricing") or {}
+                    
+                    # Convertir precios a float de forma segura
+                    try:
+                        prompt_price = float(pricing.get("prompt") or 0)
+                        completion_price = float(pricing.get("completion") or 0)
+                    except (ValueError, TypeError):
+                        prompt_price = 999.0
+                        completion_price = 999.0
+                    
+                    is_free = ":free" in model_id or (prompt_price == 0.0 and completion_price == 0.0)
+                    
+                    # Excluir gemma-2-9b-it:free porque está caída/descatalogada en OpenRouter
+                    if "gemma-2-9b-it" in model_id:
+                        continue
+                        
+                    if is_free:
+                        models.append({
+                            "id": model_id,
+                            "name": f"{m.get('name')} (OpenRouter)",
+                            "provider": "openrouter",
+                            "free": True
+                        })
                 
                 # Actualizar caché
                 _openrouter_models_cache["data"] = models
