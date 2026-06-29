@@ -1613,7 +1613,7 @@ async function loadKnowledge() {
               <div style="font-size:14px;font-weight:500">${esc(f.filename)}</div>
               <div style="font-size:12px;color:var(--text-3)">${f.chunks} chunks · ${f.status}</div>
             </div>
-            <button class="btn btn-sm btn-danger" onclick="deleteFile('${agentId}','${f.file_id}')">🗑️</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteFile('${agentId}','${f.id}')">🗑️</button>
           </div>`).join('')}</div>`
       : '<div style="font-size:14px;color:var(--text-3);margin-top:16px">No hay documentos aún. Sube el primero.</div>';
   } catch(e) { toast(e.message, 'error'); }
