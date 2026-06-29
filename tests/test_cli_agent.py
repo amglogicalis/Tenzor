@@ -100,3 +100,20 @@ def test_get_agents_unauthorized():
 def test_get_models_unauthorized():
     response = client.get("/platform/keys/models/available")
     assert response.status_code == 401
+
+def test_save_token_to_env_mocked():
+    from cli.arzor import save_token_to_env
+    # Mockear el filesystem para simular la actualización del .env
+    with patch("os.path.exists", return_value=True), \
+         patch("builtins.open") as mock_open:
+        
+        mock_file = mock_open.return_value.__enter__.return_value
+        mock_file.readlines.return_value = ["ARZOR_URL=https://web.com\n", "ARZOR_TOKEN=old_token\n"]
+        
+        save_token_to_env("super_new_token")
+        
+        # Verificar que se llamó a writelines con la línea actualizada
+        mock_file.writelines.assert_called_once()
+        written_lines = mock_file.writelines.call_args[0][0]
+        assert 'ARZOR_TOKEN="super_new_token"\n' in written_lines
+

@@ -20,6 +20,8 @@ from typing import List, Dict, Any, Optional
 
 import requests
 from dotenv import load_dotenv
+import getpass
+
 
 # Cargar variables de entorno de .env local si existe
 load_dotenv()
@@ -214,6 +216,69 @@ def resolve_agent_id(agent_name_or_id: str, base_url: str) -> str:
         return agent_name_or_id  # Fallback a devolver el mismo string (podría ser un UUID directo)
     except Exception:
         return agent_name_or_id
+
+def save_token_to_env(token: str):
+    """Guarda o actualiza la variable ARZOR_TOKEN en el archivo .env del directorio actual."""
+    env_path = ".env"
+    lines = []
+    token_inserted = False
+    
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        for i, line in enumerate(lines):
+            if line.strip().startswith("ARZOR_TOKEN="):
+                lines[i] = f'ARZOR_TOKEN="{token}"\n'
+                token_inserted = True
+                break
+                
+    if not token_inserted:
+        lines.append(f'\nARZOR_TOKEN="{token}"\n')
+        
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+def cmd_login(base_url: str):
+    """Inicia sesión en Arzor de forma interactiva y guarda el token JWT en el .env."""
+    header()
+    print(c("  🔑 Iniciar sesión en tu cuenta de Arzor AIs 🔑", "cyan"))
+    try:
+        email = input(c("  Email:      ", "bold")).strip()
+        if not email:
+            print(c("  ✗ Error: El email es obligatorio.", "red"))
+            return
+            
+        password = getpass.getpass(c("  Contraseña: ", "bold")).strip()
+        if not password:
+            print(c("  ✗ Error: La contraseña es obligatoria.", "red"))
+            return
+            
+        print(c("\n  🚀 Autenticando con el servidor...", "cyan"))
+        payload = {"email": email, "password": password}
+        result = api_post("/platform/auth/login", payload, base_url)
+        
+        token = result.get("access_token")
+        if not token:
+            print(c("  ✗ Error: El servidor no devolvió un token de acceso válido.", "red"))
+            return
+            
+        save_token_to_env(token)
+        # Actualizar la variable en memoria para esta sesión
+        global TOKEN
+        TOKEN = token
+        
+        print(c("  ✅ ¡Inicio de sesión exitoso!", "green"))
+        print(c(f"     Usuario: {result.get('display_name') or result.get('username') or email}", "white"))
+        print(c("     El token JWT se ha guardado en tu archivo .env local.", "gray"))
+        print()
+    except KeyboardInterrupt:
+        print(c("\n\n  ✗ Inicio de sesión cancelado por el usuario.", "red"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al iniciar sesión: {e}", "red"))
+        print()
+
 
 # ─── Comandos CLI Expandidos ──────────────────────────────────────────────────
 
@@ -516,7 +581,7 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
 
 def main():
     # Comprobar si se llama a un comando especial o a una tarea directa
-    special_commands = {"list-agents", "create-agent", "list-models"}
+    special_commands = {"list-agents", "create-agent", "list-models", "login"}
     
     # Manejar compatibilidad ergonómica directa
     is_special = len(sys.argv) > 1 and sys.argv[1] in special_commands
@@ -527,6 +592,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
         Comandos de Administración:
+          python cli/arzor.py login          → Inicia sesión y guarda tu token automáticamente
           python cli/arzor.py list-agents    → Lista todos tus agentes personalizados
           python cli/arzor.py create-agent   → Asistente por pasos para crear un agente
           python cli/arzor.py list-models    → Muestra todos tus modelos de IA activos
@@ -536,6 +602,7 @@ def main():
           python cli/arzor.py "Ejecuta los tests unitarios" -y --agent "Dev Python"
         """)
     )
+
     
     if is_special:
         # Definir subparsers para comandos especiales si se invoca uno
@@ -543,6 +610,7 @@ def main():
         subparsers.add_parser("list-agents", help="Listar tus agentes personalizados en la plataforma")
         subparsers.add_parser("create-agent", help="Iniciar asistente interactivo de creación de agentes")
         subparsers.add_parser("list-models", help="Listar todos los modelos de IA activos en tu cuenta")
+        subparsers.add_parser("login", help="Iniciar sesión en la plataforma y configurar credenciales locales")
         
         # Argumentos compartidos globales de conexión
         parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
@@ -554,6 +622,9 @@ def main():
             cmd_list_models(args.url)
         elif args.command == "create-agent":
             cmd_create_agent_interactive(args.url)
+        elif args.command == "login":
+            cmd_login(args.url)
+
             
     else:
         # Comportamiento por defecto: Ejecutar una tarea autónoma ReAct
