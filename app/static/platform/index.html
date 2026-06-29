@@ -624,7 +624,8 @@
       position: absolute;
       top: calc(100% + 4px);
       left: 0;
-      right: 0;
+      right: auto;
+      min-width: 100%;
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
@@ -635,6 +636,11 @@
       display: none;
       flex-direction: column;
     }
+    /* Evitar que el dropdown del proveedor de claves en el grid estrecho de 140px se corte o colapse */
+    #key-provider-custom-wrapper .custom-select-menu {
+      min-width: 250px;
+    }
+
     .custom-select-menu.open {
       display: flex;
     }
