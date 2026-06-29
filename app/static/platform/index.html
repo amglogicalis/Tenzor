@@ -1409,6 +1409,14 @@ async function showApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   
+  // Renderizado defensivo inmediato con los datos locales guardados (evita mostrar "Usuario" por defecto)
+  const localUser = state.user;
+  if (localUser) {
+    document.getElementById('top-avatar').textContent = (localUser.username || 'U')[0].toUpperCase();
+    document.getElementById('top-username').textContent = localUser.display_name || localUser.username || 'Usuario';
+    document.getElementById('dash-greeting').textContent = `Bienvenido de vuelta, ${localUser.display_name || localUser.username} 👋`;
+  }
+  
   try {
     const profile = await api('GET', '/platform/auth/me');
     if (profile) {
@@ -2420,6 +2428,17 @@ function formatDate(iso) {
   return d.toLocaleDateString('es-ES', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
 }
 
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return '—';
+  const parts = email.split('@');
+  const name = parts[0];
+  const domain = parts[1];
+  if (name.length <= 4) {
+    return name[0] + '***@' + domain;
+  }
+  return name.substring(0, 4) + '***@' + domain;
+}
+
 // ─── Custom Select Helper Engine ──────────────────────────────────────
 function initCustomSelects() {
   // Inicializar todos los selects de la pagina
@@ -2730,7 +2749,7 @@ async function loadProfilePage() {
   const u = state.user;
   if (u) {
     document.getElementById('profile-display-name-val').textContent = u.display_name || '—';
-    document.getElementById('profile-email-val').textContent = u.email || localStorage.getItem('arzor_email') || '—';
+    document.getElementById('profile-email-val').textContent = maskEmail(u.email || localStorage.getItem('arzor_email'));
     document.getElementById('profile-username-val').textContent = u.username || '—';
   }
 

@@ -12,15 +12,15 @@ Hecho -- 6.Hacer que pueda haber rondas ilimitadas en las round tables
 
 Hecho -- 7.Ver si se puede añadir provider un modelo corriendo via ollama en el pc local del user o en un server configurado por el user
 
-En proceso -- 8.Funcion de limitar palabras por pompt/consulta con el objetivo de ahorro y optimizacion, tambien a decidir limite de archivos. Antes de hcaer cambios con este paso preguntame como lo implementaremos.
+Hecho -- 8.Funcion de limitar palabras por pompt/consulta con el objetivo de ahorro y optimizacion, tambien a decidir limite de archivos. Antes de hcaer cambios con este paso preguntame como lo implementaremos.
 
-Extra 1: al iniciar sesion y escribir mal la contraseña, o que falta confirmacion, y ese tipo de errores, mostrar: "Has introducido mal la contraseña" u otra frase acorde al error en vez de read null o un error raro tipo sql 
+Hecho -- Extra 1: al iniciar sesion y escribir mal la contraseña, o que falta confirmacion, y ese tipo de errores, mostrar: "Has introducido mal la contraseña" u otra frase acorde al error en vez de read null o un error raro tipo sql 
 
-Extra 2: mejorar la apariencia de los desplegables para que se vean mas en formato y estetica de la interfaz general al igual de algunas notificaciones de informacion, como por ejemplo la que informa sobre los agentes de una round table al hacerle click o los desplegables a la hora de crear una api key con un provider el desplegable de providers.
+Hecho -- Extra 2: mejorar la apariencia de los desplegables para que se vean mas en formato y estetica de la interfaz general al igual de algunas notificaciones de informacion, como por ejemplo la que informa sobre los agentes de una round table al hacerle click o los desplegables a la hora de crear una api key con un provider el desplegable de providers.
 
-Extra 3: si es posible hacer mas vistoso, personalizado, estetico acorde a Arzor y asi verse mas fiable el correo que se manda para confirmar que es un correo real.
+Hecho -- Extra 3: si es posible hacer mas vistoso, personalizado, estetico acorde a Arzor y asi verse mas fiable el correo que se manda para confirmar que es un correo real.
 
-9. Hacer un onboarding que explique que es Arzor, como conseguir las api key gratis y como funcionan estas, como configurarlas y como usar arzor. Esto se ejcuta siempre que se detecta que el usuario se acab de craer y que es nuevo.
+Hecho -- 9. Hacer un onboarding que explique que es Arzor, como conseguir las api key gratis y como funcionan estas, como configurarlas y como usar arzor. Esto se ejcuta siempre que se detecta que el usuario se acab de craer y que es nuevo.
 
 - PASO FINAL Y NUEVO COMIENZO/ ETAPA FINAL DE Arzor: Empezar la optimizacion, mejora y desarrollo completo y verdadero de Arzros AIs Cli, el antigravity/codex nuestro.
 Este no va a tratar de ser un "especializador de modelos para cualquier cosa" si no que este sera la herramienta para ayudar a desarrolladores e informaticos. Mi plan es el siguiente:

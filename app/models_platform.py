@@ -53,7 +53,8 @@ class ProfileResponse(BaseModel):
     avatar_url: Optional[str] = None
     plan: str
     created_at: datetime
-    onboarding_completed: bool = False
+    onboarding_completed: Optional[bool] = False
+
 
 
 class UpdateProfileRequest(BaseModel):
