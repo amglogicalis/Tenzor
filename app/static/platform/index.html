@@ -962,6 +962,18 @@
         <label class="form-label">Tema del debate</label>
         <textarea id="rt-topic" rows="3" placeholder="¿Cuál es la pregunta o tema que los agentes debatirán?"></textarea>
       </div>
+      <div class="form-group" style="display:flex;gap:12px">
+        <div style="flex:1">
+          <label class="form-label">Rondas del debate (1-9999)</label>
+          <input type="number" id="rt-rounds-input" value="3" min="1" max="9999" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Agentes participantes (Selecciona entre 2 y 6 agentes)</label>
+        <div id="rt-agents-selection" style="display:flex;flex-direction:column;gap:8px;max-height:160px;overflow-y:auto;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input)">
+          <!-- Se cargan dinámicamente con JS -->
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-create-table')">Cancelar</button>
@@ -1512,43 +1524,114 @@ async function loadRoundTables() {
       </div>`;
       return;
     }
-    grid.innerHTML = tables.map(t => `
-      <div class="card" style="cursor:pointer" onclick="viewTable('${t.id}')">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-          <div style="font-size:28px">🔵</div>
-          <div>
-            <div style="font-weight:600">${esc(t.name)}</div>
-            <div style="font-size:12px;color:var(--text-3)">${esc(t.topic?.slice(0,80) || '')}…</div>
+    grid.innerHTML = tables.map(t => {
+      const savedRounds = localStorage.getItem(`rt-rounds-${t.id}`) || '3';
+      return `
+        <div class="card" style="cursor:pointer" onclick="viewTable('${t.id}')">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="font-size:28px">🔵</div>
+            <div>
+              <div style="font-weight:600">${esc(t.name)}</div>
+              <div style="font-size:12px;color:var(--text-3)">${esc(t.topic?.slice(0,80) || '')}…</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="badge ${t.status==='done'?'badge-green':t.status==='running'?'badge-amber':'badge-cyan'}">${t.status}</span>
+            ${t.status==='idle' ? `
+              <div style="display:flex;align-items:center;gap:6px" onclick="event.stopPropagation()">
+                <input type="number" id="rounds-${t.id}" value="${savedRounds}" min="1" max="9999" 
+                       style="width:70px;padding:4px 6px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-1)" />
+                <button class="btn btn-sm btn-purple" onclick="startDebate('${t.id}')">▶ Iniciar</button>
+              </div>
+            ` : ''}
+            ${t.status==='done' ? `<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();viewResult('${t.id}')">Ver resultado</button>` : ''}
           </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <span class="badge ${t.status==='done'?'badge-green':t.status==='running'?'badge-amber':'badge-cyan'}">${t.status}</span>
-          ${t.status==='idle' ? `
-            <div style="display:flex;align-items:center;gap:6px" onclick="event.stopPropagation()">
-              <input type="number" id="rounds-${t.id}" value="3" min="1" max="9999" 
-                     style="width:70px;padding:4px 6px;font-size:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-1)" />
-              <button class="btn btn-sm btn-purple" onclick="startDebate('${t.id}')">▶ Iniciar</button>
-            </div>
-          ` : ''}
-          ${t.status==='done' ? `<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();viewResult('${t.id}')">Ver resultado</button>` : ''}
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } catch(e) { toast(e.message, 'error'); }
 }
 
-function openCreateTable() { openModal('modal-create-table'); }
+async function viewTable(tableId) {
+  try {
+    const data = await api('GET', `/platform/round-table/${tableId}/members`);
+    const members = data?.members || [];
+    if (!members.length) {
+      toast('Esta mesa no tiene agentes asignados.', 'info');
+      return;
+    }
+    const names = members.map(m => {
+      const found = state.agents.find(a => a.id === m.agent_id);
+      return found ? found.name : 'Agente Desconocido';
+    });
+    alert(`Agentes participantes en este debate:\n\n` + names.map((n, i) => `${i+1}. ${n}`).join('\n'));
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openCreateTable() {
+  document.getElementById('rt-name').value = '';
+  document.getElementById('rt-topic').value = '';
+  document.getElementById('rt-rounds-input').value = '3';
+  
+  // Renderizar la selección de agentes
+  const container = document.getElementById('rt-agents-selection');
+  if (container) {
+    const agents = state.agents || [];
+    if (agents.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:4px">No tienes agentes creados. Crea agentes antes de debatir.</div>';
+    } else {
+      const ICONS = { dev:'💻', data:'📊', ops:'⚙️', science:'🔬', creative:'🎨', custom:'🤖' };
+      container.innerHTML = agents.map(a => `
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:var(--text-1);margin-bottom:4px">
+          <input type="checkbox" name="rt-agents-checkbox" value="${a.id}" />
+          <span>${ICONS[a.category] || '🤖'} <strong>${esc(a.name)}</strong> (${a.base_tier})</span>
+        </label>
+      `).join('');
+    }
+  }
+  
+  openModal('modal-create-table');
+}
 
 async function createTable() {
   const name = document.getElementById('rt-name').value.trim();
   const topic = document.getElementById('rt-topic').value.trim();
+  const roundsInput = document.getElementById('rt-rounds-input');
+  const rounds = roundsInput ? parseInt(roundsInput.value, 10) : 3;
+  
   if (!name || !topic) { toast('Nombre y tema son requeridos', 'error'); return; }
+  if (isNaN(rounds) || rounds < 1 || rounds > 9999) {
+    toast('El número de rondas debe estar entre 1 y 9999', 'error');
+    return;
+  }
+  
+  // Obtener agentes seleccionados
+  const checkboxes = document.querySelectorAll('input[name="rt-agents-checkbox"]:checked');
+  const selectedAgentIds = Array.from(checkboxes).map(cb => cb.value);
+  if (selectedAgentIds.length < 2 || selectedAgentIds.length > 6) {
+    toast('Debes seleccionar entre 2 y 6 agentes para el debate.', 'error');
+    return;
+  }
+  
   try {
+    // 1. Crear la mesa
     const table = await api('POST', '/platform/round-table', {
       name, topic, description: '',
     });
+    
+    // 2. Asociar las rondas en localStorage
+    localStorage.setItem(`rt-rounds-${table.id}`, rounds);
+    
+    // 3. Añadir miembros
+    for (let i = 0; i < selectedAgentIds.length; i++) {
+      await api('POST', `/platform/round-table/${table.id}/members`, {
+        agent_id: selectedAgentIds[i],
+        turn_order: i + 1
+      });
+    }
+    
     closeModal('modal-create-table');
-    toast('Mesa creada ✅ Ahora añade agentes en la DB o por API', 'success');
+    toast('Mesa de debate creada y agentes configurados con éxito ✅', 'success');
     loadRoundTables();
   } catch(e) { toast(e.message, 'error'); }
 }
