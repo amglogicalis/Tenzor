@@ -690,6 +690,9 @@
         <label class="form-label">Contraseña</label>
         <input type="password" id="login-password" placeholder="••••••••" />
       </div>
+      <div style="display:flex; justify-content:flex-end; margin-bottom:16px; margin-top:-8px">
+        <a href="#" style="font-size:12px; color:var(--text-3); text-decoration:underline" onclick="event.preventDefault(); switchAuthTab('forgot')">¿Olvidaste tu contraseña?</a>
+      </div>
       <button class="btn-primary" onclick="doLogin()">Entrar</button>
     </div>
 
@@ -712,6 +715,21 @@
         <input type="password" id="reg-password" placeholder="mínimo 8 caracteres" />
       </div>
       <button class="btn-primary" onclick="doRegister()">Crear cuenta</button>
+    </div>
+
+    <!-- Forgot Password -->
+    <div id="form-forgot" style="display:none">
+      <div style="font-size:13px; color:var(--text-2); margin-bottom:16px; line-height:1.5">
+        Introduce tu dirección de correo electrónico y te enviaremos un enlace para restablecer tu contraseña de forma segura.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="forgot-email" placeholder="tu@email.com" />
+      </div>
+      <button class="btn-primary" onclick="doForgotPasswordRequest()">Enviar enlace de recuperación</button>
+      <div style="text-align:center; margin-top:16px">
+        <a href="#" style="font-size:12px; color:var(--primary-light); text-decoration:underline" onclick="event.preventDefault(); switchAuthTab('login')">Volver a iniciar sesión</a>
+      </div>
     </div>
   </div>
 </div>
@@ -1137,6 +1155,31 @@
   </div>
 </div>
 
+<!-- Reset Password Modal -->
+<div class="modal-overlay" id="modal-reset-password">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Nueva Contraseña</div>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px; color:var(--text-2); margin-bottom:16px; line-height:1.5">
+        Introduce y confirma tu nueva contraseña de acceso para Arzor AIs.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nueva contraseña</label>
+        <input type="password" id="reset-pwd-new" placeholder="Mínimo 8 caracteres" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar contraseña</label>
+        <input type="password" id="reset-pwd-confirm" placeholder="••••••••" />
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px">
+      <button class="btn btn-purple" onclick="doResetPasswordSubmit()">Actualizar Contraseña</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -1160,6 +1203,20 @@ let state = {
 // ═══════════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   initCustomSelects(); // Inicializar selects generales
+  
+  // Chequear si venimos de un enlace de recuperación de contraseña de Supabase
+  const hash = window.location.hash;
+  if (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) {
+    const params = new URLSearchParams(hash.replace('#', '?'));
+    const token = params.get('access_token');
+    const type = params.get('type');
+    if (token && (type === 'recovery' || hash.includes('type=recovery'))) {
+      window.tempRecoveryToken = token;
+      window.location.hash = ''; // Limpiar URL
+      openModal('modal-reset-password');
+    }
+  }
+
   if (state.token && state.user) {
     showApp();
   } else {
@@ -1213,8 +1270,14 @@ async function apiUpload(path, formData) {
 function switchAuthTab(tab) {
   document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
   document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('form-forgot').style.display = tab === 'forgot' ? 'block' : 'none';
+  
   document.getElementById('tab-login').classList.toggle('active', tab === 'login');
   document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  if (tab === 'forgot') {
+    document.getElementById('tab-login').classList.remove('active');
+    document.getElementById('tab-register').classList.remove('active');
+  }
   hideAuthError();
 }
 
@@ -1237,15 +1300,17 @@ function hideAuthError() { document.getElementById('auth-error').style.display =
 
 async function doLogin() {
   hideAuthError();
+  const emailVal = document.getElementById('login-email').value.trim();
   try {
     const data = await api('POST', '/platform/auth/login', {
-      email: document.getElementById('login-email').value,
+      email: emailVal,
       password: document.getElementById('login-password').value,
     });
     state.token = data.access_token;
-    state.user = { user_id: data.user_id, username: data.username, display_name: data.display_name };
+    state.user = { user_id: data.user_id, username: data.username, display_name: data.display_name, email: emailVal };
     localStorage.setItem('arzor_token', state.token);
     localStorage.setItem('arzor_user', JSON.stringify(state.user));
+    localStorage.setItem('arzor_email', emailVal);
     showApp();
   } catch(e) { showAuthError(e.message); }
 }
@@ -2308,12 +2373,92 @@ function updateResendButtonState() {
   }
 }
 
+// ─── Reset / Recover Password JS Handlers ─────────────────────────────
+async function doForgotPasswordRequest() {
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email) {
+    toast('Por favor, escribe tu correo electrónico.', 'error');
+    return;
+  }
+  try {
+    const redirect_to = window.location.origin + '/platform';
+    await api('POST', '/platform/auth/recover-password', { email, redirect_to });
+    toast('📧 Enlace de recuperación enviado. Revisa tu bandeja de entrada.', 'success');
+    switchAuthTab('login');
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function doResetPasswordSubmit() {
+  const pwd = document.getElementById('reset-pwd-new').value;
+  const confirm = document.getElementById('reset-pwd-confirm').value;
+  const token = window.tempRecoveryToken;
+  
+  if (!pwd || pwd.length < 8) {
+    toast('La contraseña debe tener al menos 8 caracteres.', 'error');
+    return;
+  }
+  if (pwd !== confirm) {
+    toast('Las contraseñas no coinciden.', 'error');
+    return;
+  }
+  if (!token) {
+    toast('Token de recuperación no válido o expirado.', 'error');
+    closeModal('modal-reset-password');
+    return;
+  }
+  
+  try {
+    const res = await fetch('/platform/auth/update-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ password: pwd })
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.detail || 'Error al restablecer contraseña.');
+    
+    toast('🔒 Contraseña restablecida con éxito. Inicia sesión de nuevo.', 'success');
+    closeModal('modal-reset-password');
+    window.tempRecoveryToken = null;
+    doLogout();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function triggerProfilePasswordReset() {
+  const email = state.user?.email || localStorage.getItem('arzor_email');
+  if (!email) {
+    toast('No pudimos determinar tu correo electrónico. Por favor, inicia sesión de nuevo.', 'error');
+    return;
+  }
+  try {
+    const redirect_to = window.location.origin + '/platform';
+    await api('POST', '/platform/auth/recover-password', { email, redirect_to });
+    toast('📧 Enlace de restablecimiento enviado a tu bandeja de entrada.', 'success');
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // PLATFORM KEYS & MODEL MANAGEMENT (BYOK & RECOMMENDER)
 // ═══════════════════════════════════════════════════════════════════════
 state.availableModels = [];
 
 async function loadProfilePage() {
+  // Renderizar datos personales
+  const u = state.user;
+  if (u) {
+    document.getElementById('profile-display-name-val').textContent = u.display_name || '—';
+    document.getElementById('profile-email-val').textContent = u.email || localStorage.getItem('arzor_email') || '—';
+    document.getElementById('profile-username-val').textContent = u.username || '—';
+  }
+
   const container = document.getElementById('profile-keys-list');
   try {
     const keys = await api('GET', '/platform/keys');
@@ -2342,7 +2487,7 @@ async function loadProfilePage() {
           <div class="status-badge status-active">
             <span>●</span> Activa
           </div>
-          <button class="btn btn-sm btn-danger" onclick="deleteProviderKey('${k.id}')">🗑️ Eliminar</button>
+          <button class="btn btn-sm btn-ghost" style="color:var(--error)" onclick="deleteProviderKey('${k.id}')">🗑️ Eliminar</button>
         </div>
       </div>
     `).join('');

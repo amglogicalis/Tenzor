@@ -91,6 +91,53 @@ async def resend_confirmation(body: ResendConfirmationRequest):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al reenviar correo.")
 
 
+# ─── POST /platform/auth/recover-password ──────────────────────────────────────
+from app.models_platform import RecoverPasswordRequest
+
+@router.post(
+    "/recover-password",
+    summary="Solicitar enlace de recuperación/restablecimiento de contraseña",
+)
+async def recover_password(body: RecoverPasswordRequest):
+    """
+    Solicita a Supabase Auth el envío de un correo para restablecer la contraseña.
+    """
+    try:
+        platform_auth_service.recover_password(body.email, body.redirect_to)
+        return {"message": "Correo de restablecimiento enviado con éxito."}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error inesperado en /recover-password: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al procesar recuperación.")
+
+
+# ─── POST /platform/auth/update-password ───────────────────────────────────────
+from app.models_platform import ResetPasswordRequest
+from fastapi import Header
+
+@router.post(
+    "/update-password",
+    summary="Actualizar contraseña de usuario usando token de restablecimiento",
+)
+async def update_password(body: ResetPasswordRequest, authorization: str = Header(...)):
+    """
+    Actualiza la contraseña en Supabase Auth usando el token JWT provisto en las cabeceras.
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido o malformado.")
+    token = authorization.split(" ")[1]
+    try:
+        platform_auth_service.update_password(token, body.password)
+        return {"message": "Contraseña actualizada correctamente."}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error inesperado en /update-password: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al actualizar contraseña.")
+
+
+
 
 # ─── GET /platform/auth/me ────────────────────────────────────────────────────
 @router.get(

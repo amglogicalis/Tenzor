@@ -26,6 +26,16 @@ class ResendConfirmationRequest(BaseModel):
     email: EmailStr
 
 
+class RecoverPasswordRequest(BaseModel):
+    email: EmailStr
+    redirect_to: Optional[str] = None
+
+
+class ResetPasswordRequest(BaseModel):
+    password: str = Field(..., min_length=8)
+
+
+
 
 class AuthResponse(BaseModel):
     access_token: str

@@ -157,7 +157,31 @@ class PlatformAuthService:
             logger.error(f"Error reenviando correo de confirmación para {email}: {e}")
             raise ValueError("No se pudo reenviar el correo de confirmación. Verifica tu email.")
 
+    def recover_password(self, email: str, redirect_to: str) -> None:
+        """
+        Envía un correo de restablecimiento de contraseña usando Supabase Auth.
+        """
+        self._require_supabase()
+        try:
+            self.supabase.auth.reset_password_for_email(email, {"redirect_to": redirect_to})
+        except Exception as e:
+            logger.error(f"Error solicitando restablecimiento de contraseña para {email}: {e}")
+            raise ValueError("No se pudo enviar el correo de recuperación. Verifica tu email.")
+
+    def update_password(self, token: str, new_password: str) -> None:
+        """
+        Actualiza la contraseña del usuario utilizando el token JWT de recuperación provisto.
+        """
+        self._require_supabase()
+        try:
+            self.supabase.auth.set_session(access_token=token, refresh_token="")
+            self.supabase.auth.update_user({"password": new_password})
+        except Exception as e:
+            logger.error(f"Error actualizando la contraseña del usuario: {e}")
+            raise ValueError("No se pudo actualizar la contraseña. El enlace puede haber expirado o ser inválido.")
+
     # ─── Perfil ────────────────────────────────────────────────────────────────
+
 
 
     def get_profile(self, user_id: str) -> Dict[str, Any]:
