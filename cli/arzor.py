@@ -156,17 +156,46 @@ def _headers() -> Dict[str, str]:
 
 def api_get(path: str, base_url: str) -> Any:
     url = f"{base_url}{path}"
-    resp = requests.get(url, headers=_headers(), timeout=45)
-    resp.raise_for_status()
-    return resp.json()
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=45)
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        detail = str(e)
+        try:
+            detail = e.response.json().get("detail", detail)
+        except Exception:
+            pass
+        raise RuntimeError(detail)
+        
+    try:
+        return resp.json()
+    except json.JSONDecodeError:
+        if "html" in resp.headers.get("Content-Type", "").lower() or resp.text.strip().startswith("<!DOCTYPE"):
+            raise RuntimeError("El servidor de Arzor respondió con una página HTML en lugar de datos JSON. Verifica que la dirección URL (ARZOR_URL) apunte a la API de tu backend y no al frontend web.")
+        raise RuntimeError(f"El servidor devolvió una respuesta no válida (no es JSON): {resp.text[:200]}")
 
 def api_post(path: str, payload: dict, base_url: str) -> Any:
     url = f"{base_url}{path}"
     headers = _headers()
     headers["Content-Type"] = "application/json"
-    resp = requests.post(url, json=payload, headers=headers, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=60)
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        detail = str(e)
+        try:
+            detail = e.response.json().get("detail", detail)
+        except Exception:
+            pass
+        raise RuntimeError(detail)
+        
+    try:
+        return resp.json()
+    except json.JSONDecodeError:
+        if "html" in resp.headers.get("Content-Type", "").lower() or resp.text.strip().startswith("<!DOCTYPE"):
+            raise RuntimeError("El servidor de Arzor respondió con una página HTML en lugar de datos JSON. Verifica que la dirección URL (ARZOR_URL) apunte a la API de tu backend y no al frontend web.")
+        raise RuntimeError(f"El servidor devolvió una respuesta no válida (no es JSON): {resp.text[:200]}")
+
 
 def resolve_agent_id(agent_name_or_id: str, base_url: str) -> str:
     """Intenta buscar un agente por nombre en la cuenta del usuario para resolver su UUID."""
