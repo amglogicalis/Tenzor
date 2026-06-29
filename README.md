@@ -111,3 +111,16 @@ curl -X PATCH "http://127.0.0.1:8000/admin/keys/<UUID_DE_LA_LLAVE>/status?is_act
    - `SUPABASE_URL`
    - `SUPABASE_KEY`
 6. ¡Haz clic en Desplegar! Tu API tendrá una URL pública (ej: `https://tenzor-api.onrender.com`) lista para consumir 24/7.
+
+---
+
+## 🔮 Arzor AIs CLI (Agente de Desarrollo Autónomo local)
+
+El proyecto incluye un potente cliente de consola autónomo e interactivo que ejecuta tareas de desarrollo local en tu ordenador:
+
+* **Inicio de Sesión e Integración**: `arzor login`
+* **Administración**: `arzor list-agents`, `arzor create-agent`, `arzor list-models`
+* **Ejecución de Tareas ReAct**: `arzor "Crea un script que consuma la API"`
+
+Para obtener instrucciones detalladas de instalación del comando global, configuración del PATH en Windows y Linux, y ejemplos prácticos de desarrollo autónomo, consulta el **[Manual del CLI de Arzor AIs](cli_manual.md)**.
+
