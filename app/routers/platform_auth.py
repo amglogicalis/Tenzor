@@ -70,6 +70,28 @@ async def login(body: LoginRequest):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al iniciar sesión.")
 
 
+# ─── POST /platform/auth/resend-confirmation ──────────────────────────────────
+from app.models_platform import ResendConfirmationRequest
+
+@router.post(
+    "/resend-confirmation",
+    summary="Reenviar correo de confirmación de registro en la plataforma Arzor",
+)
+async def resend_confirmation(body: ResendConfirmationRequest):
+    """
+    Reenvía el enlace de verificación al correo especificado.
+    """
+    try:
+        platform_auth_service.resend_confirmation(body.email)
+        return {"message": "Correo de confirmación reenviado con éxito."}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error inesperado en /resend-confirmation: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al reenviar correo.")
+
+
+
 # ─── GET /platform/auth/me ────────────────────────────────────────────────────
 @router.get(
     "/me",

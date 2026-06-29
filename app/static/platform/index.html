@@ -585,6 +585,76 @@
       border-radius: 4px; padding: 1px 6px; display: inline-block;
       max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+
+    /* ── Custom Select Component ─────────────────────────────────────────── */
+    .custom-select-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    .custom-select-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-1);
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      box-sizing: border-box;
+    }
+    .custom-select-btn:focus, .custom-select-btn.open {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+    .custom-select-arrow {
+      color: var(--primary-light);
+      font-size: 10px;
+      transition: transform var(--transition);
+      margin-left: 8px;
+    }
+    .custom-select-btn.open .custom-select-arrow {
+      transform: rotate(180deg);
+    }
+    .custom-select-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 150;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      display: none;
+      flex-direction: column;
+    }
+    .custom-select-menu.open {
+      display: flex;
+    }
+    .custom-select-item {
+      padding: 10px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text-2);
+      transition: background 0.2s, color 0.2s;
+      text-align: left;
+    }
+    .custom-select-item:hover {
+      background: var(--primary-glow);
+      color: var(--text-1);
+    }
+    .custom-select-item.selected {
+      background: rgba(229,9,20,0.15);
+      color: var(--primary-light);
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -1083,6 +1153,7 @@ let state = {
 // INIT
 // ═══════════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+  initCustomSelects(); // Inicializar selects generales
   if (state.token && state.user) {
     showApp();
   } else {
@@ -1143,7 +1214,18 @@ function switchAuthTab(tab) {
 
 function showAuthError(msg) {
   const el = document.getElementById('auth-error');
-  el.textContent = msg; el.style.display = 'block';
+  if (msg.includes('confirmar') || msg.includes('confirmación') || msg.includes('email_not_confirmed')) {
+    const email = document.getElementById('login-email').value || document.getElementById('reg-email').value || '';
+    el.innerHTML = `
+      <div style="margin-bottom:8px">${esc(msg)}</div>
+      <button id="resend-email-btn" class="btn btn-sm btn-ghost" style="font-size:12px;color:var(--primary-light);text-decoration:underline;padding:4px 8px;border:1px dashed var(--primary-glow);border-radius:4px" onclick="resendConfirmation('${esc(email)}')">
+        Reenviar correo de confirmación
+      </button>
+    `;
+  } else {
+    el.textContent = msg;
+  }
+  el.style.display = 'block';
 }
 function hideAuthError() { document.getElementById('auth-error').style.display = 'none'; }
 
@@ -1364,6 +1446,7 @@ async function loadChatPage() {
 function chatWithAgent(agentId) {
   navigate('chat');
   document.getElementById('chat-agent-select').value = agentId;
+  syncCustomSelect('chat-agent-select'); // Sincronizar select custom
   state.currentAgentId = agentId;
   state.currentSessionId = null;
   const agent = state.agents.find(a => a.id === agentId);
@@ -1438,6 +1521,7 @@ async function loadSession(sessionId, agentId) {
   state.currentSessionId = sessionId;
   state.currentAgentId = agentId;
   document.getElementById('chat-agent-select').value = agentId || '';
+  syncCustomSelect('chat-agent-select'); // Sincronizar select custom
   const agent = state.agents.find(a => a.id === agentId);
   if (agent) updateChatHeader(agent);
   enableSendBtn();
@@ -2037,6 +2121,7 @@ function populateAgentSelects(agents) {
     const cur = sel.value;
     const first = sel.options[0].outerHTML;
     sel.innerHTML = first + agents.map(a => `<option value="${a.id}" ${a.id===cur?'selected':''}>${esc(a.name)}</option>`).join('');
+    updateCustomSelect(id); // Regenerar dropdown customizado para que contenga los nuevos agentes
   });
 }
 
@@ -2061,6 +2146,160 @@ function formatDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString('es-ES', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+// ─── Custom Select Helper Engine ──────────────────────────────────────
+function initCustomSelects() {
+  // Inicializar todos los selects de la pagina
+  document.querySelectorAll('select').forEach(sel => {
+    makeCustomSelect(sel.id);
+  });
+  
+  // Cerrar todos los selects si se hace click fuera
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.custom-select-menu.open').forEach(menu => {
+      menu.classList.remove('open');
+      menu.previousElementSibling.classList.remove('open');
+    });
+  });
+}
+
+function makeCustomSelect(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel || sel.dataset.customized === 'true') return;
+  
+  sel.style.display = 'none';
+  sel.dataset.customized = 'true';
+  
+  const wrapper = document.createElement('div');
+  wrapper.className = 'custom-select-wrapper';
+  wrapper.id = `${selectId}-custom-wrapper`;
+  
+  const btn = document.createElement('button');
+  btn.className = 'custom-select-btn';
+  btn.type = 'button';
+  
+  const selectedOpt = sel.options[sel.selectedIndex] || sel.options[0];
+  const selectedText = selectedOpt ? selectedOpt.textContent : 'Seleccionar...';
+  
+  btn.innerHTML = `<span>${esc(selectedText)}</span><span class="custom-select-arrow">▼</span>`;
+  wrapper.appendChild(btn);
+  
+  const menu = document.createElement('div');
+  menu.className = 'custom-select-menu';
+  
+  buildCustomSelectItems(sel, menu, btn);
+  wrapper.appendChild(menu);
+  
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Cerrar otros dropdowns customs
+    document.querySelectorAll('.custom-select-menu.open').forEach(other => {
+      if (other !== menu) {
+        other.classList.remove('open');
+        other.previousElementSibling.classList.remove('open');
+      }
+    });
+    menu.classList.toggle('open');
+    btn.classList.toggle('open');
+  });
+  
+  sel.parentNode.insertBefore(wrapper, sel.nextSibling);
+}
+
+function buildCustomSelectItems(sel, menu, btn) {
+  menu.innerHTML = '';
+  Array.from(sel.options).forEach(opt => {
+    const item = document.createElement('div');
+    item.className = 'custom-select-item';
+    if (opt.value === sel.value) item.classList.add('selected');
+    item.textContent = opt.textContent;
+    item.dataset.value = opt.value;
+    
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event('change'));
+      
+      btn.querySelector('span').textContent = opt.textContent;
+      menu.classList.remove('open');
+      btn.classList.remove('open');
+      
+      menu.querySelectorAll('.custom-select-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+    });
+    menu.appendChild(item);
+  });
+}
+
+function updateCustomSelect(selectId) {
+  const sel = document.getElementById(selectId);
+  const wrapper = document.getElementById(`${selectId}-custom-wrapper`);
+  if (!sel) return;
+  if (!wrapper) {
+    makeCustomSelect(selectId);
+    return;
+  }
+  const btn = wrapper.querySelector('.custom-select-btn');
+  const menu = wrapper.querySelector('.custom-select-menu');
+  if (btn && menu) {
+    const selectedOpt = sel.options[sel.selectedIndex] || sel.options[0];
+    btn.querySelector('span').textContent = selectedOpt ? selectedOpt.textContent : 'Seleccionar...';
+    buildCustomSelectItems(sel, menu, btn);
+  }
+}
+
+function syncCustomSelect(selectId) {
+  const sel = document.getElementById(selectId);
+  const wrapper = document.getElementById(`${selectId}-custom-wrapper`);
+  if (!sel || !wrapper) return;
+  
+  const btn = wrapper.querySelector('.custom-select-btn');
+  const menu = wrapper.querySelector('.custom-select-menu');
+  const selectedOpt = sel.options[sel.selectedIndex];
+  
+  if (btn && selectedOpt) {
+    btn.querySelector('span').textContent = selectedOpt.textContent;
+  }
+  if (menu) {
+    menu.querySelectorAll('.custom-select-item').forEach(item => {
+      item.classList.toggle('selected', item.dataset.value === sel.value);
+    });
+  }
+}
+
+// ─── Verification Email Resend ────────────────────────────────────────
+let resendCooldown = 0;
+async function resendConfirmation(email) {
+  if (resendCooldown > 0) return;
+  if (!email) {
+    email = prompt('Por favor, introduce tu dirección de correo electrónico:');
+    if (!email) return;
+  }
+  try {
+    await api('POST', '/platform/auth/resend-confirmation', { email });
+    toast('📧 Correo de confirmación reenviado. Revisa tu buzón y carpeta de spam.', 'success');
+    
+    // Cooldown de 60 segundos
+    resendCooldown = 60;
+    updateResendButtonState();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+function updateResendButtonState() {
+  const btn = document.getElementById('resend-email-btn');
+  if (!btn) return;
+  if (resendCooldown > 0) {
+    btn.disabled = true;
+    btn.textContent = `Reenviar correo (${resendCooldown}s)`;
+    resendCooldown--;
+    setTimeout(updateResendButtonState, 1000);
+  } else {
+    btn.disabled = false;
+    btn.textContent = `Reenviar correo de confirmación`;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

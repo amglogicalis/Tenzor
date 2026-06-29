@@ -22,6 +22,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ResendConfirmationRequest(BaseModel):
+    email: EmailStr
+
+
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

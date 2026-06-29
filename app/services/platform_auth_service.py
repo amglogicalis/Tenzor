@@ -143,7 +143,22 @@ class PlatformAuthService:
             "display_name": profile.get("display_name"),
         }
 
+    def resend_confirmation(self, email: str) -> None:
+        """
+        Reenvía el correo de confirmación de registro (signup) usando Supabase Auth.
+        """
+        self._require_supabase()
+        try:
+            self.supabase.auth.resend({
+                "type": "signup",
+                "email": email
+            })
+        except Exception as e:
+            logger.error(f"Error reenviando correo de confirmación para {email}: {e}")
+            raise ValueError("No se pudo reenviar el correo de confirmación. Verifica tu email.")
+
     # ─── Perfil ────────────────────────────────────────────────────────────────
+
 
     def get_profile(self, user_id: str) -> Dict[str, Any]:
         """Devuelve el perfil del usuario."""
