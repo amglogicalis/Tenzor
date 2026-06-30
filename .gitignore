@@ -22,3 +22,11 @@ respuesta.md
 *.egg-info/
 build/
 dist/
+
+# Logs locales y configuraciones de desarrollo residuales
+logsrender.txt
+generation_config.json
+
+# Trazas, historia local y scratchpad del CLI de Arzor
+.arzor_history.json
+.arzor_scratchpad.json
