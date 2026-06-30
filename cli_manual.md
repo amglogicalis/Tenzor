@@ -207,6 +207,7 @@ arzor "Crea un script en Python que analice el archivo logs.txt y extraiga las I
 * `--tier {fast,balanced,pro}`: Indica la calidad del modelo (por defecto `balanced`).
 * `-y`, `--yes`: **Modo automático (no interactivo)**. El agente ejecutará comandos del sistema y escribirá/modificará archivos locales sin pedirte confirmación.
 * `--url "URL"`: Sobrescribe temporalmente la URL del servidor de Arzor.
+* `--max-steps LIMIT`: Límite máximo de pasos / rondas de ejecución de la tarea ReAct (por defecto `25`). Permite ingresar un entero o la palabra `"unlimited"` para permitir al agente trabajar sin restricciones de rondas en tareas densas.
 
 ---
 

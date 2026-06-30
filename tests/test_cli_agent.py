@@ -237,5 +237,89 @@ def test_cli_plan_registration():
             auto_confirm=ANY,
             agent_id=ANY,
             base_url=ANY,
-            dry_run=True
+            dry_run=True,
+            max_steps=ANY
+        )
+
+def test_read_file_lines_physical_tool(tmp_path):
+    import os
+    from cli.arzor import read_file_lines
+    test_file = tmp_path / "test_read.py"
+    content = (
+        "import sys\n"
+        "class MyClass:\n"
+        "    def hello(self):\n"
+        "        print('hello')\n"
+        "def main():\n"
+        "    pass\n"
+    )
+    test_file.write_text(content, encoding="utf-8")
+    
+    # Leer líneas 2 a 4
+    res = read_file_lines(str(test_file), 2, 4)
+    assert "[SKELETON ESTRUCTURAL DEL ARCHIVO" in res
+    assert "class MyClass" in res
+    assert "def hello" in res
+    assert "2: class MyClass:" in res
+    assert "3:     def hello(self):" in res
+
+def test_write_file_patch_physical_tool(tmp_path):
+    import os
+    from cli.arzor import write_file_patch
+    test_file = tmp_path / "test_patch.py"
+    test_file.write_text("linea1\nlinea2\nlinea3\n", encoding="utf-8")
+    
+    # Parche unificado simple
+    patch_str = (
+        "@@ -1,3 +1,3 @@\n"
+        " linea1\n"
+        "-linea2\n"
+        "+linea2_modificada\n"
+        " linea3\n"
+    )
+    
+    res = write_file_patch(str(test_file), patch_str)
+    assert "Éxito: Parche aplicado correctamente" in res
+    assert test_file.read_text(encoding="utf-8") == "linea1\nlinea2_modificada\nlinea3\n"
+
+def test_search_codebase_physical_tool():
+    from cli.arzor import search_codebase
+    # Buscar una query que sabemos que existe en el repo, por ejemplo "def run_agent_loop"
+    res = search_codebase("def run_agent_loop")
+    assert "arzor.py" in res
+    assert "run_agent_loop" in res
+
+def test_manage_scratchpad_physical_tool(tmp_path):
+    import os
+    from unittest.mock import patch
+    from cli.arzor import manage_scratchpad
+    
+    scratch_file = tmp_path / ".arzor_scratchpad.json"
+    with patch("os.path.dirname", return_value=str(tmp_path)):
+        # Escribir en scratchpad
+        res_w = manage_scratchpad("write", "mi memoria temporal")
+        assert "Éxito" in res_w
+        assert os.path.exists(str(scratch_file))
+        
+        # Leer de scratchpad
+        res_r = manage_scratchpad("read")
+        assert "mi memoria temporal" in res_r
+
+def test_cli_max_steps_argparse():
+    from unittest.mock import ANY
+    with patch("sys.argv", ["arzor", "plan", "Crea", "un", "test", "--max-steps", "15"]), \
+         patch("cli.arzor.run_agent_loop") as mock_loop:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_loop.assert_called_once_with(
+            task="Crea un test",
+            tier=ANY,
+            auto_confirm=ANY,
+            agent_id=ANY,
+            base_url=ANY,
+            dry_run=True,
+            max_steps=15
         )

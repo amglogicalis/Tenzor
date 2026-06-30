@@ -122,18 +122,26 @@ Reglas críticas de comportamiento:
 Debes responder ÚNICAMENTE en el siguiente formato JSON, sin añadir texto libre antes ni después:
 {
   "thought": "Tu razonamiento paso a paso sobre el estado actual y lo que planeas hacer a continuación.",
-  "action": "list_directory | read_file_content | write_file_content | edit_file_content | execute_system_command | finish",
+  "action": "list_directory | read_file_content | read_file_lines | write_file_content | write_file_patch | edit_file_content | execute_system_command | search_codebase | manage_scratchpad | finish",
   "args": {
     // Si la acción es list_directory:
     //   "path": "ruta/al/directorio" (opcional, por defecto ".")
     // Si la acción es read_file_content:
-    //   "path": "ruta/al/archivo"
+    //   "path": "ruta/al/archivo" (lee el contenido completo de un archivo)
+    // Si la acción es read_file_lines:
+    //   "path": "ruta/al/archivo", "start_line": número_entero, "end_line": número_entero (1-indexed, lee rangos específicos para ahorrar contexto e inyecta la estructura/skeleton del archivo al inicio de la observación)
     // Si la acción es write_file_content:
     //   "path": "ruta/al/archivo", "content": "contenido completo del archivo"
+    // Si la acción es write_file_patch:
+    //   "path": "ruta/al/archivo", "patch": "diff unificado standard para aplicar modificaciones (ideal para archivos medianos/grandes para ahorrar payload de red)"
     // Si la acción es edit_file_content:
     //   "path": "ruta/al/archivo", "target_text": "texto exacto a reemplazar", "replacement_text": "nuevo texto"
     // Si la acción es execute_system_command:
     //   "command": "comando de consola a ejecutar"
+    // Si la acción es search_codebase:
+    //   "query": "término o expresión regular para buscar clases, métodos, variables o imports en todo el proyecto"
+    // Si la acción es manage_scratchpad:
+    //   "mode": "read" o "write", "content": "contenido a persistir en la memoria de trabajo temporal de la tarea" (opcional para write)
     // Si la acción es finish:
     //   "message": "Resumen final detallado del trabajo realizado"
   }

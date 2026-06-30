@@ -229,6 +229,208 @@ def edit_file_content(path: str, target_text: str, replacement_text: str) -> str
     except Exception as e:
         return f"Error al editar archivo: {str(e)}"
 
+def read_file_lines(path: str, start_line: int, end_line: int) -> str:
+    """Lee un rango de líneas de un archivo y devuelve también un esqueleto/skeleton de su estructura."""
+    try:
+        if not os.path.exists(path):
+            return f"Error: El archivo '{path}' no existe."
+        if os.path.isdir(path):
+            return f"Error: '{path}' es un directorio, usa list_directory."
+            
+        skeleton_lines = []
+        target_lines = []
+        
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            for idx, line in enumerate(f, start=1):
+                # Generar skeleton estructural
+                stripped = line.strip()
+                if stripped.startswith(("def ", "class ", "import ", "from ")):
+                    indent = len(line) - len(line.lstrip())
+                    skeleton_lines.append(f"{' ' * indent}L{idx}: {stripped}")
+                
+                # Extraer líneas del rango solicitado
+                if start_line <= idx <= end_line:
+                    target_lines.append(line.rstrip('\r\n'))
+                    
+        obs = []
+        if skeleton_lines:
+            obs.append("--- [SKELETON ESTRUCTURAL DEL ARCHIVO (Imports, Clases y Funciones)] ---")
+            obs.append("\n".join(skeleton_lines[:120]))
+            obs.append("-------------------------------------------------------------------------")
+        obs.append(f"--- [CONTENIDO DE LÍNEAS SOLICITADAS (Líneas {start_line} a {end_line})] ---")
+        if target_lines:
+            for i, line in enumerate(target_lines, start=start_line):
+                obs.append(f"{i}: {line}")
+        else:
+            obs.append("(fuera de rango o vacío)")
+        obs.append("-------------------------------------------------------------------------")
+        
+        return "\n".join(obs)
+    except Exception as e:
+        return f"Error al leer líneas de archivo: {str(e)}"
+
+def write_file_patch(path: str, patch_content: str) -> str:
+    """Aplica un diff unificado (patch) en un archivo local. Si no existe, lo crea."""
+    try:
+        # Si el archivo no existe, crearlo vacío para poder aplicar el parche
+        if not os.path.exists(path):
+            dir_name = os.path.dirname(path)
+            if dir_name and not os.path.exists(dir_name):
+                os.makedirs(dir_name, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("")
+                
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            original_content = f.read()
+            
+        # Parseador interno robusto de parches unificados
+        lines = original_content.splitlines(keepends=True)
+        patch_lines = patch_content.splitlines()
+        
+        i = 0
+        hunks = []
+        while i < len(patch_lines):
+            line = patch_lines[i]
+            if line.startswith("@@"):
+                import re
+                match = re.match(r"^@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@", line)
+                if match:
+                    old_start = int(match.group(1))
+                    old_len = int(match.group(2) or 1)
+                    new_start = int(match.group(3))
+                    new_len = int(match.group(4) or 1)
+                    hunk = {"old_start": old_start, "old_len": old_len, "lines": []}
+                    i += 1
+                    while i < len(patch_lines) and not patch_lines[i].startswith("@@"):
+                        hunk["lines"].append(patch_lines[i])
+                        i += 1
+                    hunks.append(hunk)
+                    continue
+            i += 1
+            
+        if not hunks:
+            return "Error: No se encontraron hunks válidos de tipo '@@' en el parche. Asegúrate del formato unificado."
+            
+        offset = 0
+        for hunk in hunks:
+            start_idx = hunk["old_start"] - 1 + offset
+            end_idx = start_idx + hunk["old_len"]
+            
+            # Reconstruir líneas esperadas y nuevas del hunk
+            expected_lines = []
+            new_lines = []
+            for pl in hunk["lines"]:
+                if pl.startswith(" ") or pl.startswith("-"):
+                    expected_lines.append(pl[1:])
+                if pl.startswith(" ") or pl.startswith("+"):
+                    new_lines.append(pl[1:])
+                    
+            actual_chunk = [l.rstrip() for l in lines[start_idx:end_idx]]
+            expected_chunk = [l.rstrip() for l in expected_lines]
+            
+            # Buscar en las inmediaciones (offset de tolerancia local de +/- 5 líneas)
+            matched = False
+            for local_offset in range(-5, 6):
+                cand_start = start_idx + local_offset
+                cand_end = cand_start + hunk["old_len"]
+                if cand_start >= 0 and cand_end <= len(lines):
+                    cand_chunk = [l.rstrip() for l in lines[cand_start:cand_end]]
+                    if cand_chunk == expected_chunk:
+                        start_idx = cand_start
+                        end_idx = cand_end
+                        matched = True
+                        break
+                        
+            if not matched and actual_chunk != expected_chunk:
+                return (
+                    f"Error: El bloque de líneas original a modificar no coincide.\n"
+                    f"Esperado:\n{chr(10).join(expected_chunk)}\n"
+                    f"Encontrado:\n{chr(10).join(actual_chunk)}"
+                )
+                
+            # Aplicar reemplazo
+            lines[start_idx:end_idx] = [nl + "\n" for nl in new_lines]
+            offset += len(new_lines) - hunk["old_len"]
+            
+        new_content = "".join(lines)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+            
+        return f"Éxito: Parche aplicado correctamente en el archivo '{path}'."
+    except Exception as e:
+        return f"Error al aplicar parche en el archivo: {str(e)}"
+
+def search_codebase(query: str) -> str:
+    """Busca coincidencias de texto o expresiones regulares en todos los archivos del codebase."""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        repo_dir = os.path.dirname(script_dir)
+        
+        ignored_dirs = {
+            "venv", ".git", "__pycache__", ".agents", "node_modules", 
+            "dist", ".env", ".gemini", "tests"
+        }
+        
+        import re
+        matches = []
+        
+        for root, dirs, files in os.walk(repo_dir):
+            # Filtrar carpetas ignoradas
+            dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith('.')]
+            
+            for file in files:
+                # Ignorar binarios conocidos
+                if file.endswith((".pyc", ".pyo", ".png", ".jpg", ".zip", ".tar", ".gz", ".db", ".json")):
+                    if file != ".arzor_history.json":
+                        continue
+                        
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, repo_dir)
+                
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        for idx, line in enumerate(f, start=1):
+                            if re.search(query, line, re.IGNORECASE):
+                                matches.append(f"• {rel_path} (L{idx}): {line.strip()}")
+                except Exception:
+                    pass
+                    
+        if not matches:
+            return f"No se encontraron coincidencias para '{query}' en el proyecto."
+            
+        # Limitar resultados a un máximo razonable por seguridad
+        limited = matches[:100]
+        res = [f"Resultados de búsqueda para '{query}' ({len(matches)} coincidencias encontradas):"]
+        res.extend(limited)
+        if len(matches) > 100:
+            res.append("... (y otras coincidencias omitidas por longitud)")
+        return "\n".join(res)
+    except Exception as e:
+        return f"Error al buscar en el codebase: {str(e)}"
+
+def manage_scratchpad(mode: str, content: str = None) -> str:
+    """Lee o escribe datos en la memoria de trabajo temporal (.arzor_scratchpad.json)."""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        repo_dir = os.path.dirname(script_dir)
+        scratchpad_path = os.path.join(repo_dir, ".arzor_scratchpad.json")
+        
+        if mode == "write":
+            data = {"content": content or ""}
+            with open(scratchpad_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return "Éxito: Memoria de trabajo scratchpad actualizada."
+        elif mode == "read":
+            if not os.path.exists(scratchpad_path):
+                return "(Memoria de trabajo scratchpad vacía o no inicializada)"
+            with open(scratchpad_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return f"Contenido del scratchpad:\n{data.get('content', '')}"
+        else:
+            return f"Error: Modo '{mode}' no soportado (usa 'read' o 'write')."
+    except Exception as e:
+        return f"Error al gestionar el scratchpad: {str(e)}"
+
 def execute_system_command(command: str) -> str:
     """Ejecuta un comando de consola del sistema operativo y devuelve stdout/stderr."""
     try:
@@ -1195,7 +1397,7 @@ def call_agent_step(messages: List[Dict[str, str]], base_url: str, tier: str, ag
     }
     return api_post("/platform/crew/agent-step", payload, base_url)
 
-def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base_url: str, dry_run: bool = False):
+def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base_url: str, dry_run: bool = False, max_steps: int = 25):
     """Ejecuta el bucle ReAct del agente autónomo local (o plan de simulación)."""
     header()
     
@@ -1233,7 +1435,6 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
     ]
     
     step_count = 0
-    max_steps = 25
     
     while step_count < max_steps:
         step_count += 1
@@ -1361,6 +1562,12 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 observation = list_directory(args.get("path", "."))
             elif action == "read_file_content":
                 observation = read_file_content(args.get("path", ""))
+            elif action == "read_file_lines":
+                observation = read_file_lines(
+                    args.get("path", ""),
+                    int(args.get("start_line", 1)),
+                    int(args.get("end_line", 1))
+                )
             elif action == "write_file_content":
                 path = args.get("path", "")
                 content = args.get("content", "")
@@ -1368,6 +1575,13 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 print(textwrap.indent(content, "       "))
                 print()
                 observation = f"Éxito: [DRY-RUN] Archivo '{path}' simulado correctamente en memoria."
+            elif action == "write_file_patch":
+                path = args.get("path", "")
+                patch = args.get("patch", "")
+                print(c(f"     [PLAN] Se aplicaría el parche en '{path}':", "yellow"))
+                print(textwrap.indent(patch, "       "))
+                print()
+                observation = f"Éxito: [DRY-RUN] Parche en '{path}' simulado correctamente en memoria."
             elif action == "edit_file_content":
                 path = args.get("path", "")
                 target = args.get("target_text", "")
@@ -1383,6 +1597,10 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 cmd = args.get("command", "")
                 print(c(f"     [PLAN] Se ejecutaría el comando: {cmd}", "yellow"))
                 observation = f"Éxito: [DRY-RUN] Comando '{cmd}' simulado con éxito (Salida simulada por entorno de pruebas)."
+            elif action == "search_codebase":
+                observation = search_codebase(args.get("query", ""))
+            elif action == "manage_scratchpad":
+                observation = manage_scratchpad(args.get("mode", "read"), args.get("content"))
             else:
                 observation = f"Error: La herramienta '{action}' no está soportada."
         else:
@@ -1391,6 +1609,12 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 observation = list_directory(args.get("path", "."))
             elif action == "read_file_content":
                 observation = read_file_content(args.get("path", ""))
+            elif action == "read_file_lines":
+                observation = read_file_lines(
+                    args.get("path", ""),
+                    int(args.get("start_line", 1)),
+                    int(args.get("end_line", 1))
+                )
             elif action == "write_file_content":
                 path = args.get("path", "")
                 # Guardar backup original si ya existe
@@ -1405,6 +1629,20 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                     if path not in created_files:
                         created_files.append(path)
                 observation = write_file_content(path, args.get("content", ""))
+            elif action == "write_file_patch":
+                path = args.get("path", "")
+                # Guardar backup original si ya existe
+                if os.path.exists(path):
+                    if path not in modified_files:
+                        try:
+                            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                                modified_files[path] = f.read()
+                        except Exception:
+                            pass
+                else:
+                    if path not in created_files:
+                        created_files.append(path)
+                observation = write_file_patch(path, args.get("patch", ""))
             elif action == "edit_file_content":
                 path = args.get("path", "")
                 # Guardar backup original
@@ -1417,6 +1655,10 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 observation = edit_file_content(path, args.get("target_text", ""), args.get("replacement_text", ""))
             elif action == "execute_system_command":
                 observation = execute_system_command(args.get("command", ""))
+            elif action == "search_codebase":
+                observation = search_codebase(args.get("query", ""))
+            elif action == "manage_scratchpad":
+                observation = manage_scratchpad(args.get("mode", "read"), args.get("content"))
             else:
                 observation = f"Error: La herramienta '{action}' no está soportada."
             
@@ -1434,6 +1676,16 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
         print(c("  ✗ Límite de pasos alcanzado sin completar la tarea.", "red"))
         print()
 
+    # Limpieza automática del scratchpad al finalizar
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        repo_dir = os.path.dirname(script_dir)
+        scratchpad_path = os.path.join(repo_dir, ".arzor_scratchpad.json")
+        if os.path.exists(scratchpad_path):
+            os.remove(scratchpad_path)
+    except Exception:
+        pass
+
 # ─── CLI Entry Point ──────────────────────────────────────────────────────────
 
 def main():
@@ -1445,8 +1697,14 @@ def main():
         "clean", "test-agent", "plan"
     }
     
-    # Manejar compatibilidad ergonómica directa
-    is_special = len(sys.argv) > 1 and sys.argv[1] in special_commands
+    # Manejar compatibilidad ergonómica directa de comandos especiales (ignorando flags y sus valores)
+    is_special = False
+    for idx, arg in enumerate(sys.argv[1:], start=1):
+        if idx > 1 and sys.argv[idx-1] in ("--url", "--tier", "--agent", "--agents"):
+            continue
+        if arg in special_commands:
+            is_special = True
+            break
     
     parser = argparse.ArgumentParser(
         prog="arzor",
@@ -1508,6 +1766,7 @@ def main():
         plan_parser.add_argument("task", nargs="+", help="Descripción de la tarea a simular")
         plan_parser.add_argument("--tier", default="balanced", choices=["fast", "balanced", "pro"], help="Tier de calidad a simular")
         plan_parser.add_argument("--agent", default="", help="Nombre o UUID del agente personalizado a simular")
+        plan_parser.add_argument("--max-steps", default="25", help="Límite máximo de pasos ReAct (entero o 'unlimited')")
         
         # Argumentos compartidos globales de conexión
         parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
@@ -1540,13 +1799,15 @@ def main():
         elif args.command == "test-agent":
             cmd_test_agent(args.agent, args.url)
         elif args.command == "plan":
+            steps_val = 500 if args.max_steps == "unlimited" else int(args.max_steps)
             run_agent_loop(
                 task=" ".join(args.task),
                 tier=args.tier,
                 auto_confirm=True,  # Para plan se pre-confirma la simulación sin molestar
                 agent_id=args.agent,
                 base_url=args.url,
-                dry_run=True
+                dry_run=True,
+                max_steps=steps_val
             )
             
     else:
@@ -1558,6 +1819,7 @@ def main():
         parser.add_argument("-y", "--yes", action="store_true", dest="auto_confirm",
                             help="Modo automático: ejecuta acciones de herramientas sin pedir confirmación")
         parser.add_argument("--agent", default="", help="Nombre o UUID del agente personalizado a usar")
+        parser.add_argument("--max-steps", default="25", help="Límite máximo de pasos ReAct (entero o 'unlimited')")
 
         args = parser.parse_args()
 
@@ -1566,12 +1828,14 @@ def main():
             sys.exit(0)
 
         task_str = " ".join(args.task)
+        steps_val = 500 if args.max_steps == "unlimited" else int(args.max_steps)
         run_agent_loop(
             task=task_str,
             tier=args.tier,
             auto_confirm=args.auto_confirm,
             agent_id=args.agent,
-            base_url=args.url
+            base_url=args.url,
+            max_steps=steps_val
         )
 
 if __name__ == "__main__":
