@@ -703,7 +703,7 @@ def cmd_list_keys(base_url: str):
         print(c("  ═════════════════════════════════════════════", "gray"))
         if not keys:
             print(c("  No hay ninguna clave de API configurada en tu cuenta.", "yellow"))
-            print(c("  Puedes añadir una con: arzor keys add [proveedor] [api_key]", "gray"))
+            print(c("  Puedes añadir una con: arzor add-keys [proveedor] [api_key]", "gray"))
             print()
             return
             
@@ -1811,7 +1811,7 @@ def main():
         "list-agents", "create-agent", "list-models", "login", 
         "round-table", "debate", "team", "whoami", "user", 
         "register", "signup", "logout", "status", "update", 
-        "clean", "test-agent", "plan", "keys"
+        "clean", "test-agent", "plan", "list-keys", "add-keys", "remove-keys"
     }
     
     # Manejar compatibilidad ergonómica directa de comandos especiales (ignorando flags y sus valores)
@@ -1885,17 +1885,15 @@ def main():
         plan_parser.add_argument("--agent", default="", help="Nombre o UUID del agente personalizado a simular")
         plan_parser.add_argument("--max-steps", default="25", help="Límite máximo de pasos ReAct (entero o 'unlimited')")
         
-        # Comando keys de gestión de API Keys
-        keys_parser = subparsers.add_parser("keys", help="Administración de API Keys de proveedores de IA")
-        keys_subparsers = keys_parser.add_subparsers(dest="keys_command", required=True)
-        keys_subparsers.add_parser("list", help="Lista las claves de API activas de tu cuenta")
+        # Comandos de gestión de API Keys (planos de primer nivel)
+        subparsers.add_parser("list-keys", help="Lista las claves de API activas de tu cuenta")
         
-        add_parser = keys_subparsers.add_parser("add", help="Registra o actualiza una API Key de proveedor")
+        add_parser = subparsers.add_parser("add-keys", help="Registra o actualiza una API Key de proveedor")
         add_parser.add_argument("provider", help="Proveedor de IA (groq, google, anthropic, openrouter, etc.)")
         add_parser.add_argument("api_key", help="Clave de API en formato de texto crudo")
-        add_parser.add_argument("--label", default="", help="Etiqueta u apodo personalizado para identificar la clave")
+        add_parser.add_argument("--label", default="", help="Etiqueta o apodo personalizado para identificar la clave")
         
-        remove_parser = keys_subparsers.add_parser("remove", help="Elimina una API Key por proveedor o UUID")
+        remove_parser = subparsers.add_parser("remove-keys", help="Elimina una API Key por proveedor o UUID")
         remove_parser.add_argument("provider_or_id", help="Nombre del proveedor (ej: groq) o identificador UUID de la clave")
 
         # Argumentos compartidos globales de conexión
@@ -1939,13 +1937,12 @@ def main():
                 dry_run=True,
                 max_steps=steps_val
             )
-        elif args.command == "keys":
-            if args.keys_command == "list":
-                cmd_list_keys(args.url)
-            elif args.keys_command == "add":
-                cmd_add_key(args.provider, args.api_key, args.label, args.url)
-            elif args.keys_command == "remove":
-                cmd_remove_key(args.provider_or_id, args.url)
+        elif args.command == "list-keys":
+            cmd_list_keys(args.url)
+        elif args.command == "add-keys":
+            cmd_add_key(args.provider, args.api_key, args.label, args.url)
+        elif args.command == "remove-keys":
+            cmd_remove_key(args.provider_or_id, args.url)
             
     else:
         # Comportamiento por defecto: Ejecutar una tarea autónoma ReAct

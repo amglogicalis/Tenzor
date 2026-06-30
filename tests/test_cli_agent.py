@@ -324,8 +324,8 @@ def test_cli_max_steps_argparse():
             max_steps=15
         )
 
-def test_cli_keys_list_argparse():
-    with patch("sys.argv", ["arzor", "keys", "list"]), \
+def test_cli_list_keys_argparse():
+    with patch("sys.argv", ["arzor", "list-keys"]), \
          patch("cli.arzor.cmd_list_keys") as mock_list:
         try:
             from cli.arzor import main
@@ -334,9 +334,9 @@ def test_cli_keys_list_argparse():
             pass
         mock_list.assert_called_once()
 
-def test_cli_keys_add_argparse():
+def test_cli_add_keys_argparse():
     from unittest.mock import ANY
-    with patch("sys.argv", ["arzor", "keys", "add", "groq", "gsk_12345", "--label", "Mi Groq"]), \
+    with patch("sys.argv", ["arzor", "add-keys", "groq", "gsk_12345", "--label", "Mi Groq"]), \
          patch("cli.arzor.cmd_add_key") as mock_add:
         try:
             from cli.arzor import main
@@ -345,9 +345,9 @@ def test_cli_keys_add_argparse():
             pass
         mock_add.assert_called_once_with("groq", "gsk_12345", "Mi Groq", ANY)
 
-def test_cli_keys_remove_argparse():
+def test_cli_remove_keys_argparse():
     from unittest.mock import ANY
-    with patch("sys.argv", ["arzor", "keys", "remove", "groq"]), \
+    with patch("sys.argv", ["arzor", "remove-keys", "groq"]), \
          patch("cli.arzor.cmd_remove_key") as mock_remove:
         try:
             from cli.arzor import main

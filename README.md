@@ -119,7 +119,7 @@ curl -X PATCH "http://127.0.0.1:8000/admin/keys/<UUID_DE_LA_LLAVE>/status?is_act
 El proyecto incluye un potente cliente de consola autónomo e interactivo que ejecuta tareas de desarrollo local en tu ordenador:
 
 * **Autenticación y Registro**: `arzor login`, `arzor register`, `arzor whoami`, `arzor logout`
-* **Administración y Utilidades**: `arzor list-agents`, `arzor create-agent`, `arzor list-models`, `arzor status`, `arzor update`, `arzor test-agent`, `arzor keys`
+* **Administración y Utilidades**: `arzor list-agents`, `arzor create-agent`, `arzor list-models`, `arzor status`, `arzor update`, `arzor test-agent`, `arzor list-keys`, `arzor add-keys`, `arzor remove-keys`
 * **Simulación y Deshacer**: `arzor plan`, `arzor clean`
 * **Colaboración**: `arzor debate`, `arzor team`
 * **Ejecución de Tareas ReAct**: `arzor "Crea un script que consuma la API"`
