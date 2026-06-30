@@ -1,10 +1,19 @@
-# 🔮 Arzor AIs & Tenzor API
+<p align="center">
+  <img src="https://tenzor-web.onrender.com/static/logo_arzor.png" alt="Arzor AIs Logo" width="128" height="128" style="object-fit: contain;" />
+</p>
 
-> **Suite Profesional de Ingeniería de Software Autónoma**: Agente CLI interactivo local de desarrollo de código y API Gateway de inferencia avanzada especializada en Cloud, DevOps e Ingeniería de Sistemas.
+<h1 align="center">🔮 Arzor AIs & Tenzor API</h1>
 
-[![Licencia](https://img.shields.io/badge/Licencia-Propietaria-red.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
+<p align="center">
+  <strong>Suite Profesional de Ingeniería de Software Autónoma</strong><br />
+  Agente CLI interactivo local de desarrollo de código y API Gateway de inferencia avanzada especializada en Cloud, DevOps e Ingeniería de Sistemas.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Licencia-Propietaria-red.svg" alt="Licencia" /></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python" /></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.100+-green.svg" alt="FastAPI" /></a>
+</p>
 
 ---
 
@@ -65,7 +74,7 @@ Para instrucciones detalladas, parámetros avanzados del bucle ReAct (`--max-ste
 
 ---
 
-## 🧠 2. Tenzor API (API Gateway / Wrapper Inferencia)
+## <img src="https://tenzor-web.onrender.com/static/logo.png" alt="Tenzor Logo" width="28" height="28" align="center" style="margin-right: 8px;" /> 2. Tenzor API (API Gateway / Wrapper Inferencia)
 
 **Tenzor** es una API Gateway compatible con OpenAI especializada exclusivamente en Ingeniería de Software. Inyecta reglas estrictas de dominio fáctico a modelos base, gestiona cuotas y almacena claves en Supabase de forma transparente.
 
