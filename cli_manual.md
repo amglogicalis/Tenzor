@@ -168,6 +168,22 @@ arzor test-agent "Dev Python"
 ```
 * Envía un ping ligero de inferencia al agente y verifica que el backend procesa el paso correctamente, mostrando el tiempo de respuesta.
 
+### 5. Gestión de API Keys de Proveedores (`keys`)
+Administra de forma segura las credenciales de tus proveedores de IA (Groq, Google Gemini, Anthropic, OpenRouter, etc.) directamente desde la terminal:
+
+* **Listar Claves**: Muestra las claves configuradas en tu cuenta con la máscara de seguridad activada (`sk-****`):
+  ```bash
+  arzor keys list
+  ```
+* **Añadir o Modificar Clave**: Registra la API Key de un proveedor:
+  ```bash
+  arzor keys add groq "gsk_xxxxxx..." --label "Clave de Trabajo"
+  ```
+* **Eliminar Clave**: Elimina la credencial de un proveedor o por su UUID directo de Supabase:
+  ```bash
+  arzor keys remove groq
+  ```
+
 ---
 
 ## 🛡️ Auditoría, Simulación y Deshacer (`plan` y `clean`)

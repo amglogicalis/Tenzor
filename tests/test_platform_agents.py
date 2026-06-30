@@ -137,7 +137,8 @@ class TestCreateAgent:
         assert resp.status_code == 422
 
     def test_create_agent_limit_reached(self):
-        sb_agent = self._build_create_mock(count=10)  # límite por defecto = 10
+        # Tras remover la restricción de agentes máximos, crear un agente con count>=10 es exitoso (201)
+        sb_agent = self._build_create_mock(count=10)  
         auth_sb = make_auth_mock()
         with patch("app.services.platform_auth_service.platform_auth_service.supabase", auth_sb), \
              patch("app.services.agent_service.agent_service.supabase", sb_agent):
@@ -146,8 +147,7 @@ class TestCreateAgent:
                 json=CREATE_PAYLOAD,
                 headers={"Authorization": VALID_TOKEN},
             )
-        assert resp.status_code == 400
-        assert "límite" in resp.json()["detail"].lower()
+        assert resp.status_code == 201
 
 
 # ─── Tests de listado ─────────────────────────────────────────────────────────

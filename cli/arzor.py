@@ -506,6 +506,24 @@ def api_post(path: str, payload: dict, base_url: str) -> Any:
             raise RuntimeError("El servidor de Arzor respondió con una página HTML en lugar de datos JSON. Verifica que la dirección URL (ARZOR_URL) apunte a la API de tu backend y no al frontend web.")
         raise RuntimeError(f"El servidor devolvió una respuesta no válida (no es JSON): {resp.text[:200]}")
 
+def api_delete(path: str, base_url: str) -> Any:
+    url = f"{base_url}{path}"
+    try:
+        resp = requests.delete(url, headers=_headers(), timeout=45)
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        detail = str(e)
+        try:
+            detail = e.response.json().get("detail", detail)
+        except Exception:
+            pass
+        raise RuntimeError(detail)
+        
+    try:
+        return resp.json()
+    except json.JSONDecodeError:
+        return {"status": "success"}
+
 
 def resolve_agent_id(agent_name_or_id: str, base_url: str) -> str:
     """Intenta buscar un agente por nombre en la cuenta del usuario para resolver su UUID."""
@@ -667,6 +685,112 @@ def cmd_register(base_url: str):
         print()
     except Exception as e:
         print(c(f"  ✗ Error al registrar la cuenta: {e}", "red"))
+        print()
+
+def cmd_list_keys(base_url: str):
+    """Lista las API Keys registradas en el perfil de usuario."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: Debes iniciar sesión con 'arzor login' primero.", "red"))
+        print()
+        return
+        
+    try:
+        with Spinner("Consultando claves registradas en el servidor"):
+            keys = api_get("/platform/keys", base_url)
+            
+        print(c("  🔑 Claves de Proveedores de IA en tu Cuenta 🔑", "cyan"))
+        print(c("  ═════════════════════════════════════════════", "gray"))
+        if not keys:
+            print(c("  No hay ninguna clave de API configurada en tu cuenta.", "yellow"))
+            print(c("  Puedes añadir una con: arzor keys add [proveedor] [api_key]", "gray"))
+            print()
+            return
+            
+        # Formatear lista
+        print(f"  {'PROVEEDOR':<15} {'APODO/ETIQUETA':<22} {'CLAVE DE API':<20} {'CREACIÓN':<15}")
+        print(c("  ───────────────────────────────────────────────────────────────────────────", "gray"))
+        for k in keys:
+            prov = k.get("provider", "desconocido").upper()
+            label = k.get("key_label", "")
+            masked = k.get("masked_key", "sk-****")
+            created = k.get("created_at", "")
+            date_str = created.split("T")[0] if "T" in created else created[:10]
+            print(f"  {c(prov, 'bold'):<24} {label:<22} {c(masked, 'cyan'):<29} {date_str:<15}")
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al obtener listado de llaves: {e}", "red"))
+        print()
+
+def cmd_add_key(provider: str, api_key: str, label: str, base_url: str):
+    """Añade o modifica una API Key de proveedor en el servidor."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: Debes iniciar sesión con 'arzor login' primero.", "red"))
+        print()
+        return
+        
+    prov_lower = provider.strip().lower()
+    lbl = label or f"Key de {provider}"
+    
+    payload = {
+        "provider": prov_lower,
+        "key_label": lbl,
+        "api_key": api_key.strip()
+    }
+    
+    try:
+        with Spinner(f"Registrando clave para {provider} en la plataforma"):
+            api_post("/platform/keys", payload, base_url)
+        print(c(f"  ✅ Clave para '{provider}' registrada correctamente con etiqueta '{lbl}'.", "green"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al registrar clave: {e}", "red"))
+        print()
+
+def cmd_remove_key(provider_or_id: str, base_url: str):
+    """Elimina una API Key buscando por ID o por nombre de proveedor."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: Debes iniciar sesión con 'arzor login' primero.", "red"))
+        print()
+        return
+        
+    try:
+        # 1. Obtener la lista de claves del usuario
+        with Spinner("Buscando clave en el servidor"):
+            keys = api_get("/platform/keys", base_url)
+            
+        target_id = None
+        # Comprobar si el input es un UUID directo
+        import re
+        is_uuid = bool(re.match(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", provider_or_id))
+        
+        if is_uuid:
+            target_id = provider_or_id
+        else:
+            # Buscar coincidencia por proveedor (ej. "groq")
+            matches = [k for k in keys if k.get("provider", "").lower() == provider_or_id.lower()]
+            if not matches:
+                print(c(f"  ✗ No se encontró ninguna clave registrada para el proveedor o ID '{provider_or_id}'.", "red"))
+                print()
+                return
+            if len(matches) > 1:
+                print(c(f"  ⚠ Advertencia: Tienes múltiples claves para '{provider_or_id}':", "yellow"))
+                for m in matches:
+                    print(f"    • ID: {m['key_id']} (Etiqueta: {m['key_label']})")
+                print(c("    Por favor, ejecuta de nuevo indicando el ID/UUID exacto de la clave a eliminar.", "gray"))
+                print()
+                return
+            target_id = matches[0]["key_id"]
+            
+        with Spinner("Eliminando clave del servidor"):
+            api_delete(f"/platform/keys/{target_id}", base_url)
+            
+        print(c("  ✅ Clave eliminada con éxito de tu cuenta.", "green"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al eliminar clave: {e}", "red"))
         print()
 
 def cmd_logout():
@@ -908,17 +1032,10 @@ def cmd_list_models(base_url: str):
             print()
             return
             
-        # Filtrar modelos de codificación
-        coding_models = [m for m in models if is_coding_model(m.get("id", ""), m.get("provider", ""))]
-        if not coding_models:
-            print(c("  No hay modelos de programación/desarrollo disponibles con tus API Keys configuradas.", "yellow"))
-            print(c("  Configura claves para Google, Groq, DeepSeek, Anthropic o Mistral en el Panel Web.", "gray"))
-            print()
-            return
-            
+        # Mostrar todos los modelos disponibles sin filtrar
         # Agrupar por proveedor
         grouped = {}
-        for m in coding_models:
+        for m in models:
             prov = m.get("provider", "Otros").upper()
             if prov not in grouped:
                 grouped[prov] = []
@@ -1694,13 +1811,13 @@ def main():
         "list-agents", "create-agent", "list-models", "login", 
         "round-table", "debate", "team", "whoami", "user", 
         "register", "signup", "logout", "status", "update", 
-        "clean", "test-agent", "plan"
+        "clean", "test-agent", "plan", "keys"
     }
     
     # Manejar compatibilidad ergonómica directa de comandos especiales (ignorando flags y sus valores)
     is_special = False
     for idx, arg in enumerate(sys.argv[1:], start=1):
-        if idx > 1 and sys.argv[idx-1] in ("--url", "--tier", "--agent", "--agents"):
+        if idx > 1 and sys.argv[idx-1] in ("--url", "--tier", "--agent", "--agents", "--label"):
             continue
         if arg in special_commands:
             is_special = True
@@ -1768,6 +1885,19 @@ def main():
         plan_parser.add_argument("--agent", default="", help="Nombre o UUID del agente personalizado a simular")
         plan_parser.add_argument("--max-steps", default="25", help="Límite máximo de pasos ReAct (entero o 'unlimited')")
         
+        # Comando keys de gestión de API Keys
+        keys_parser = subparsers.add_parser("keys", help="Administración de API Keys de proveedores de IA")
+        keys_subparsers = keys_parser.add_subparsers(dest="keys_command", required=True)
+        keys_subparsers.add_parser("list", help="Lista las claves de API activas de tu cuenta")
+        
+        add_parser = keys_subparsers.add_parser("add", help="Registra o actualiza una API Key de proveedor")
+        add_parser.add_argument("provider", help="Proveedor de IA (groq, google, anthropic, openrouter, etc.)")
+        add_parser.add_argument("api_key", help="Clave de API en formato de texto crudo")
+        add_parser.add_argument("--label", default="", help="Etiqueta u apodo personalizado para identificar la clave")
+        
+        remove_parser = keys_subparsers.add_parser("remove", help="Elimina una API Key por proveedor o UUID")
+        remove_parser.add_argument("provider_or_id", help="Nombre del proveedor (ej: groq) o identificador UUID de la clave")
+
         # Argumentos compartidos globales de conexión
         parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
         args = parser.parse_args()
@@ -1809,6 +1939,13 @@ def main():
                 dry_run=True,
                 max_steps=steps_val
             )
+        elif args.command == "keys":
+            if args.keys_command == "list":
+                cmd_list_keys(args.url)
+            elif args.keys_command == "add":
+                cmd_add_key(args.provider, args.api_key, args.label, args.url)
+            elif args.keys_command == "remove":
+                cmd_remove_key(args.provider_or_id, args.url)
             
     else:
         # Comportamiento por defecto: Ejecutar una tarea autónoma ReAct

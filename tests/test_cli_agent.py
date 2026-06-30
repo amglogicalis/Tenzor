@@ -323,3 +323,35 @@ def test_cli_max_steps_argparse():
             dry_run=True,
             max_steps=15
         )
+
+def test_cli_keys_list_argparse():
+    with patch("sys.argv", ["arzor", "keys", "list"]), \
+         patch("cli.arzor.cmd_list_keys") as mock_list:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_list.assert_called_once()
+
+def test_cli_keys_add_argparse():
+    from unittest.mock import ANY
+    with patch("sys.argv", ["arzor", "keys", "add", "groq", "gsk_12345", "--label", "Mi Groq"]), \
+         patch("cli.arzor.cmd_add_key") as mock_add:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_add.assert_called_once_with("groq", "gsk_12345", "Mi Groq", ANY)
+
+def test_cli_keys_remove_argparse():
+    from unittest.mock import ANY
+    with patch("sys.argv", ["arzor", "keys", "remove", "groq"]), \
+         patch("cli.arzor.cmd_remove_key") as mock_remove:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_remove.assert_called_once_with("groq", ANY)

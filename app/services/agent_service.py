@@ -52,21 +52,6 @@ class AgentService:
         """
         self._require_supabase()
 
-        # 1. Verificar límite de agentes por usuario
-        count_resp = (
-            self.supabase.table("custom_agents")
-            .select("id", count="exact")
-            .eq("user_id", user_id)
-            .is_("deleted_at", "null")
-            .execute()
-        )
-        current_count = count_resp.count or 0
-        if current_count >= config.ARZOR_MAX_AGENTS_PER_USER:
-            raise ValueError(
-                f"Has alcanzado el límite de {config.ARZOR_MAX_AGENTS_PER_USER} agentes. "
-                "Borra alguno antes de crear uno nuevo."
-            )
-
         # 2. Insertar el agente (sin current_version_id por ahora)
         try:
             agent_resp = (
