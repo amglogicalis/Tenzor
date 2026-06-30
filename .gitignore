@@ -30,3 +30,14 @@ generation_config.json
 # Trazas, historia local y scratchpad del CLI de Arzor
 .arzor_history.json
 .arzor_scratchpad.json
+
+# Carpetas de desarrollo y base de datos local excluidas de producción
+tests/
+supabase/
+
+# Planes, informes y trazas de refinamiento del proyecto
+implementation_plan.md
+refinamiento.md
+provider_research.md
+plantilla_email_confirmacion.html
+analizador_ips.py
