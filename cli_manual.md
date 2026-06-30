@@ -135,6 +135,63 @@ arzor team "Diseña un CRUD de usuarios, escribe la API y realiza tests en pytes
 * **Cascada local autónoma**: Ejecuta de forma secuencial cada subtarea llamando al agente asignado en tu máquina de desarrollo. Cada agente trabaja directamente sobre el código local construido por el agente anterior, completando el ciclo colaborativo.
 
 
+## 🔧 Comandos de Utilidad, Diagnóstico y Mantenimiento
+
+### 1. Diagnóstico de Salud y Conexión (`status`)
+Realiza un escaneo de tu estado de conexión local y la salud de la API:
+```bash
+arzor status
+```
+* Muestra la URL base a la que apunta el CLI.
+* Indica la latencia en milisegundos hacia el servidor si está activo (`ONLINE`/`OFFLINE`).
+* Informa de tu estado de autenticación (validez del token JWT y cuenta vinculada).
+
+### 2. Cerrar Sesión (`logout`)
+Cierra de forma segura tu sesión activa en el ordenador actual:
+```bash
+arzor logout
+```
+* Borra permanentemente el token de acceso JWT del archivo `.env` global para evitar llamadas no autorizadas.
+
+### 3. Actualización Automática del CLI (`update`)
+Mantiene tu CLI al día con un solo comando:
+```bash
+arzor update
+```
+* Descarga los últimos commits y parches del repositorio de GitHub de forma automática (`git pull`).
+* Reinstala el paquete en modo editable en tu entorno de desarrollo (`pip install -e .`) de manera transparente.
+
+### 4. Testear Inferencia de un Agente (`test-agent`)
+Verifica que las API Keys de un agente en particular y el modelo de IA asociado responden con éxito y no tienen límites de tasa bloqueados:
+```bash
+arzor test-agent "Dev Python"
+```
+* Envía un ping ligero de inferencia al agente y verifica que el backend procesa el paso correctamente, mostrando el tiempo de respuesta.
+
+---
+
+## 🛡️ Auditoría, Simulación y Deshacer (`plan` y `clean`)
+
+El CLI proporciona herramientas avanzadas para planificar el trabajo de la IA antes de ejecutarlo o revertir cambios accidentales:
+
+### 1. Simulación Dry-Run (`plan`)
+Muestra el árbol completo de intenciones del agente ReAct paso a paso sin escribir nada en el disco ni ejecutar comandos de consola reales en tu PC:
+```bash
+arzor plan "Crea un servidor Flask y escribe tests en pytest" --agent "Dev Python"
+```
+* **Inspección de Archivos**: Te pinta en pantalla el código completo de los archivos que la IA planea crear.
+* **Inspección de Comandos**: Imprime qué comandos del sistema intentaría lanzar.
+* **Seguridad total**: El bucle se completa simulando éxito en cada acción, permitiéndote auditar la solución propuesta por el agente.
+
+### 2. Rollback de la Última Tarea (`clean`)
+Deshace de forma física todos los cambios en tus carpetas provocados por la última ejecución del agente:
+```bash
+arzor clean
+```
+* **Borrado**: Elimina físicamente todos los archivos nuevos creados por el agente.
+* **Restauración**: Restaura el contenido original de los archivos modificados que el agente alteró.
+* *Nota*: Basado en el registro temporal de transacciones de escritura `.arzor_history.json`.
+
 ---
 
 ## 🤖 Ejecución de Tareas Autónomas (Bucle ReAct)

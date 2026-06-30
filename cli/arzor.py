@@ -467,6 +467,191 @@ def cmd_register(base_url: str):
         print(c(f"  ✗ Error al registrar la cuenta: {e}", "red"))
         print()
 
+def cmd_logout():
+    """Cierra la sesión del usuario eliminando el token JWT del archivo .env global."""
+    header()
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(script_dir)
+    env_path = os.path.join(repo_dir, ".env")
+    
+    if not os.path.exists(env_path):
+        print(c("  ✗ No hay ningún archivo .env configurado.", "red"))
+        print()
+        return
+        
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        new_lines = []
+        token_found = False
+        for line in lines:
+            if line.strip().startswith("ARZOR_TOKEN="):
+                token_found = True
+                continue  # Eliminar esta línea
+            new_lines.append(line)
+            
+        if token_found:
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+            global TOKEN
+            TOKEN = ""
+            print(c("  ✅ Sesión cerrada con éxito.", "green"))
+            print(c("     El token JWT ha sido eliminado de tu archivo de configuración.", "gray"))
+        else:
+            print(c("  ℹ️ No se ha detectado ninguna sesión activa en el archivo .env.", "yellow"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al cerrar sesión: {e}", "red"))
+        print()
+
+def cmd_status(base_url: str):
+    """Realiza un diagnóstico de la conexión y configuración de Arzor CLI."""
+    header()
+    print(c("  🔮 Diagnóstico de Arzor AIs CLI 🔮", "cyan"))
+    print(c("  ══════════════════════════════════", "gray"))
+    
+    # 1. Dirección del Servidor
+    print(f"  • Servidor API:     {c(base_url, 'white')}")
+    
+    # 2. Verificar Conexión
+    try:
+        start_time = time.time()
+        # Endpoint ligero para ping rápido
+        response = requests.get(f"{base_url}/platform/keys/models/available", headers={"Authorization": f"Bearer {TOKEN}"} if TOKEN else {}, timeout=5)
+        latency = int((time.time() - start_time) * 1000)
+        print(f"  • Conexión:         {c('ONLINE', 'green')} ({latency}ms)")
+    except Exception:
+        print(f"  • Conexión:         {c('OFFLINE', 'red')}")
+        
+    # 3. Estado de la Sesión
+    if TOKEN:
+        print(f"  • Sesión:           {c('AUTENTICADO', 'green')}")
+        # Intentar ver el perfil para confirmar validez
+        try:
+            profile = api_get("/platform/auth/me", base_url)
+            print(f"  • Cuenta:           {c(profile.get('email'), 'bold')} ({profile.get('display_name')})")
+        except Exception:
+            print(f"  • Cuenta:           {c('TOKEN INVÁLIDO O EXPIRADO', 'red')}")
+    else:
+        print(f"  • Sesión:           {c('SIN AUTENTICAR', 'yellow')}")
+        
+    # 4. Entorno de Instalación
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    print(f"  • Ruta del CLI:     {c(script_dir, 'gray')}")
+    print(c("  ══════════════════════════════════", "gray"))
+    print()
+
+def cmd_update():
+    """Actualiza el CLI automáticamente jalando cambios de git y reinstalando."""
+    header()
+    print(c("  🔄 Actualizando Arzor AIs CLI 🔄", "cyan"))
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(script_dir)
+    
+    try:
+        # 1. Ejecutar git pull
+        print(c("  • Descargando últimos cambios desde GitHub...", "white"))
+        pull_res = subprocess.run(["git", "pull", "origin", "main"], cwd=repo_dir, capture_output=True, text=True, check=True)
+        print(c(pull_res.stdout.strip(), "gray"))
+        
+        # 2. Reinstalar en modo editable
+        print(c("\n  • Reinstalando el paquete en modo editable...", "white"))
+        pip_cmd = "pip"
+        venv_pip = os.path.join(repo_dir, "venv", "Scripts", "pip.exe")
+        if os.path.exists(venv_pip):
+            pip_cmd = venv_pip
+        elif sys.platform != "win32":
+            venv_pip_unix = os.path.join(repo_dir, "venv", "bin", "pip")
+            if os.path.exists(venv_pip_unix):
+                pip_cmd = venv_pip_unix
+                
+        install_res = subprocess.run([pip_cmd, "install", "-e", "."], cwd=repo_dir, capture_output=True, text=True, check=True)
+        print(c("  ✅ Reinstalación completada con éxito.", "green"))
+        print()
+    except subprocess.CalledProcessError as e:
+        print(c(f"\n  ✗ Error durante la actualización: {e}", "red"))
+        if e.stderr:
+            print(c(e.stderr, "gray"))
+        print()
+    except Exception as e:
+        print(c(f"\n  ✗ Error inesperado al actualizar: {e}", "red"))
+        print()
+
+def cmd_test_agent(agent_name_or_id: str, base_url: str):
+    """Envía un ping de prueba al agente para validar que sus API Keys y modelo responden."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: Debes iniciar sesión con 'arzor login' primero.", "red"))
+        print()
+        return
+        
+    try:
+        resolved_id = resolve_agent_id(agent_name_or_id, base_url)
+        print(c(f"  🧪 Testeando Agente: {agent_name_or_id} ➔ {resolved_id}", "cyan"))
+        
+        payload = {
+            "messages": [{"role": "user", "content": "test_ping"}],
+            "tier": "fast",
+            "agent_id": resolved_id
+        }
+        
+        with Spinner("Enviando ping de inferencia al agente"):
+            result = api_post("/platform/crew/agent-step", payload, base_url)
+            
+        print(c("  ✅ Inferencia exitosa. El agente responde correctamente.", "green"))
+        print(f"     Respuesta de prueba: {c(result.get('thought') or 'Ping exitoso', 'gray')}")
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Test fallido: El agente no pudo completar la inferencia.", "red"))
+        print(c(f"    Detalle del error: {e}", "gray"))
+        print()
+
+def cmd_clean():
+    """Revierte los cambios creados o modificados en la última ejecución."""
+    header()
+    print(c("  🧹 Deshaciendo Cambios de la Última Tarea (Rollback) 🧹", "yellow"))
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(script_dir)
+    history_path = os.path.join(repo_dir, ".arzor_history.json")
+    
+    if not os.path.exists(history_path):
+        print(c("  ✗ No se ha encontrado ningún historial de la última tarea para revertir.", "red"))
+        print()
+        return
+        
+    try:
+        with open(history_path, "r", encoding="utf-8") as f:
+            history = json.load(f)
+            
+        created_files = history.get("created_files", [])
+        modified_files = history.get("modified_files", {})
+        
+        # 1. Eliminar archivos creados
+        deleted_count = 0
+        for path in created_files:
+            if os.path.exists(path):
+                os.remove(path)
+                print(c(f"     • Eliminado: {path}", "red"))
+                deleted_count += 1
+                
+        # 2. Restaurar archivos modificados
+        restored_count = 0
+        for path, old_content in modified_files.items():
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(old_content)
+            print(c(f"     • Restaurado: {path}", "green"))
+            restored_count += 1
+            
+        os.remove(history_path)
+        print()
+        print(c(f"  ✅ Reversión exitosa: {deleted_count} creados borrados, {restored_count} modificados restaurados.", "green"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al ejecutar el rollback: {e}", "red"))
+        print()
+
 
 
 # ─── Comandos CLI Expandidos ──────────────────────────────────────────────────
@@ -1010,9 +1195,13 @@ def call_agent_step(messages: List[Dict[str, str]], base_url: str, tier: str, ag
     }
     return api_post("/platform/crew/agent-step", payload, base_url)
 
-def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base_url: str):
-    """Ejecuta el bucle ReAct del agente autónomo local."""
+def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base_url: str, dry_run: bool = False):
+    """Ejecuta el bucle ReAct del agente autónomo local (o plan de simulación)."""
     header()
+    
+    # Historial de cambios locales para el comando clean
+    created_files = []
+    modified_files = {}
     
     if not TOKEN:
         print(c("  ✗ Error: La variable de entorno ARZOR_TOKEN está vacía.", "red"))
@@ -1030,9 +1219,12 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
             print(c(f"  • Usando identificador/UUID directo: {c(agent_id, 'cyan')}", "gray"))
         print()
 
-    print(c("  🚀 Iniciando agente autónomo local...", "cyan"))
+    if dry_run:
+        print(c("  ✨ Iniciando PLAN DE SIMULACIÓN del agente autónomo... (Dry-Run)", "yellow"))
+    else:
+        print(c("  🚀 Iniciando agente autónomo local...", "cyan"))
     print(c(f"  Tarea: {task}", "white"))
-    print(c(f"  Tier:  {tier}  |  Modo Auto-Confirmar: {'SÍ' if auto_confirm else 'NO'}", "gray"))
+    print(c(f"  Tier:  {tier}  |  Modo Auto-Confirmar: {'SÍ' if auto_confirm or dry_run else 'NO'}", "gray"))
     print(c(f"  URL del Servidor: {base_url}", "gray"))
     print()
 
@@ -1126,6 +1318,21 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 print(c("\n  📝 Mensaje final de la IA:", "bold"))
                 print(textwrap.indent(args["message"], "     "))
             print()
+            
+            # Guardar el historial de transacciones locales para el comando clean
+            if not dry_run and (created_files or modified_files):
+                try:
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    repo_dir = os.path.dirname(script_dir)
+                    history_path = os.path.join(repo_dir, ".arzor_history.json")
+                    with open(history_path, "w", encoding="utf-8") as f:
+                        json.dump({
+                            "task": task,
+                            "created_files": created_files,
+                            "modified_files": modified_files
+                        }, f, indent=2)
+                except Exception:
+                    pass
             break
             
         print(c("  🛠️  Acción solicitada:", "yellow"))
@@ -1148,18 +1355,70 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
                 sys.exit(0)
                 
         observation = ""
-        if action == "list_directory":
-            observation = list_directory(args.get("path", "."))
-        elif action == "read_file_content":
-            observation = read_file_content(args.get("path", ""))
-        elif action == "write_file_content":
-            observation = write_file_content(args.get("path", ""), args.get("content", ""))
-        elif action == "edit_file_content":
-            observation = edit_file_content(args.get("path", ""), args.get("target_text", ""), args.get("replacement_text", ""))
-        elif action == "execute_system_command":
-            observation = execute_system_command(args.get("command", ""))
+        if dry_run:
+            # Modo Simulación (Plan)
+            if action == "list_directory":
+                observation = list_directory(args.get("path", "."))
+            elif action == "read_file_content":
+                observation = read_file_content(args.get("path", ""))
+            elif action == "write_file_content":
+                path = args.get("path", "")
+                content = args.get("content", "")
+                print(c(f"     [PLAN] Se crearía el archivo '{path}' con contenido:", "yellow"))
+                print(textwrap.indent(content, "       "))
+                print()
+                observation = f"Éxito: [DRY-RUN] Archivo '{path}' simulado correctamente en memoria."
+            elif action == "edit_file_content":
+                path = args.get("path", "")
+                target = args.get("target_text", "")
+                replacement = args.get("replacement_text", "")
+                print(c(f"     [PLAN] En el archivo '{path}', se reemplazaría:", "yellow"))
+                print(c("       <<< ELIMINAR:", "red"))
+                print(textwrap.indent(target, "         "))
+                print(c("       >>> INSERTA:", "green"))
+                print(textwrap.indent(replacement, "         "))
+                print()
+                observation = f"Éxito: [DRY-RUN] Modificación en '{path}' simulada correctamente en memoria."
+            elif action == "execute_system_command":
+                cmd = args.get("command", "")
+                print(c(f"     [PLAN] Se ejecutaría el comando: {cmd}", "yellow"))
+                observation = f"Éxito: [DRY-RUN] Comando '{cmd}' simulado con éxito (Salida simulada por entorno de pruebas)."
+            else:
+                observation = f"Error: La herramienta '{action}' no está soportada."
         else:
-            observation = f"Error: La herramienta '{action}' no está soportada."
+            # Modo Ejecución Real
+            if action == "list_directory":
+                observation = list_directory(args.get("path", "."))
+            elif action == "read_file_content":
+                observation = read_file_content(args.get("path", ""))
+            elif action == "write_file_content":
+                path = args.get("path", "")
+                # Guardar backup original si ya existe
+                if os.path.exists(path):
+                    if path not in modified_files:
+                        try:
+                            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                                modified_files[path] = f.read()
+                        except Exception:
+                            pass
+                else:
+                    if path not in created_files:
+                        created_files.append(path)
+                observation = write_file_content(path, args.get("content", ""))
+            elif action == "edit_file_content":
+                path = args.get("path", "")
+                # Guardar backup original
+                if os.path.exists(path) and path not in modified_files:
+                    try:
+                        with open(path, "r", encoding="utf-8", errors="replace") as f:
+                            modified_files[path] = f.read()
+                    except Exception:
+                        pass
+                observation = edit_file_content(path, args.get("target_text", ""), args.get("replacement_text", ""))
+            elif action == "execute_system_command":
+                observation = execute_system_command(args.get("command", ""))
+            else:
+                observation = f"Error: La herramienta '{action}' no está soportada."
             
         print(c("  👁️  Observación (Resultado):", "gray"))
         truncated_obs = observation[:500] + "..." if len(observation) > 500 else observation
@@ -1179,7 +1438,12 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
 
 def main():
     # Comprobar si se llama a un comando especial o a una tarea directa
-    special_commands = {"list-agents", "create-agent", "list-models", "login", "round-table", "debate", "team", "whoami", "user", "register", "signup"}
+    special_commands = {
+        "list-agents", "create-agent", "list-models", "login", 
+        "round-table", "debate", "team", "whoami", "user", 
+        "register", "signup", "logout", "status", "update", 
+        "clean", "test-agent", "plan"
+    }
     
     # Manejar compatibilidad ergonómica directa
     is_special = len(sys.argv) > 1 and sys.argv[1] in special_commands
@@ -1193,6 +1457,12 @@ def main():
           python cli/arzor.py login          → Inicia sesión y guarda tu token automáticamente
           python cli/arzor.py register       → Crea una nueva cuenta interactiva en la plataforma
           python cli/arzor.py whoami         → Muestra los detalles de tu cuenta de usuario conectada
+          python cli/arzor.py logout         → Cierra la sesión activa localmente
+          python cli/arzor.py status         → Diagnóstico de la conexión y configuración
+          python cli/arzor.py update         → Descarga e instala los últimos cambios automáticamente
+          python cli/arzor.py clean          → Deshace los cambios locales de la última tarea
+          python cli/arzor.py test-agent [A] → Verifica la salud e inferencia de un agente
+          python cli/arzor.py plan [T]       → Muestra un dry-run simulado en memoria de una tarea
           python cli/arzor.py list-agents    → Lista todos tus agentes personalizados
           python cli/arzor.py create-agent   → Asistente por pasos para crear un agente
           python cli/arzor.py list-models    → Muestra todos tus modelos de IA activos
@@ -1226,6 +1496,19 @@ def main():
         subparsers.add_parser("register", help="Registrar una nueva cuenta en la plataforma")
         subparsers.add_parser("signup", help="Alias de register")
         
+        subparsers.add_parser("logout", help="Cerrar la sesión activa de Arzor localmente")
+        subparsers.add_parser("status", help="Muestra el diagnóstico y salud de conexión de Arzor CLI")
+        subparsers.add_parser("update", help="Descargar e instalar automáticamente la última versión del CLI")
+        subparsers.add_parser("clean", help="Deshacer los cambios de archivos locales de la última tarea")
+        
+        test_parser = subparsers.add_parser("test-agent", help="Probar el tiempo de respuesta e inferencia de un agente")
+        test_parser.add_argument("agent", help="Nombre o UUID del agente personalizado a validar")
+        
+        plan_parser = subparsers.add_parser("plan", help="Muestra un plan dry-run simulado en memoria de una tarea")
+        plan_parser.add_argument("task", nargs="+", help="Descripción de la tarea a simular")
+        plan_parser.add_argument("--tier", default="balanced", choices=["fast", "balanced", "pro"], help="Tier de calidad a simular")
+        plan_parser.add_argument("--agent", default="", help="Nombre o UUID del agente personalizado a simular")
+        
         # Argumentos compartidos globales de conexión
         parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
         args = parser.parse_args()
@@ -1246,8 +1529,25 @@ def main():
             cmd_whoami(args.url)
         elif args.command in ("register", "signup"):
             cmd_register(args.url)
-
-
+        elif args.command == "logout":
+            cmd_logout()
+        elif args.command == "status":
+            cmd_status(args.url)
+        elif args.command == "update":
+            cmd_update()
+        elif args.command == "clean":
+            cmd_clean()
+        elif args.command == "test-agent":
+            cmd_test_agent(args.agent, args.url)
+        elif args.command == "plan":
+            run_agent_loop(
+                task=" ".join(args.task),
+                tier=args.tier,
+                auto_confirm=True,  # Para plan se pre-confirma la simulación sin molestar
+                agent_id=args.agent,
+                base_url=args.url,
+                dry_run=True
+            )
             
     else:
         # Comportamiento por defecto: Ejecutar una tarea autónoma ReAct

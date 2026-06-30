@@ -170,3 +170,72 @@ def test_cli_register_registration():
         except SystemExit:
             pass
         mock_register.assert_called_once()
+
+def test_cli_logout_registration():
+    with patch("sys.argv", ["arzor", "logout"]), \
+         patch("cli.arzor.cmd_logout") as mock_logout:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_logout.assert_called_once()
+
+def test_cli_status_registration():
+    with patch("sys.argv", ["arzor", "status"]), \
+         patch("cli.arzor.cmd_status") as mock_status:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_status.assert_called_once()
+
+def test_cli_update_registration():
+    with patch("sys.argv", ["arzor", "update"]), \
+         patch("cli.arzor.cmd_update") as mock_update:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_update.assert_called_once()
+
+def test_cli_clean_registration():
+    with patch("sys.argv", ["arzor", "clean"]), \
+         patch("cli.arzor.cmd_clean") as mock_clean:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_clean.assert_called_once()
+
+def test_cli_test_agent_registration():
+    from unittest.mock import ANY
+    with patch("sys.argv", ["arzor", "test-agent", "Dev Python"]), \
+         patch("cli.arzor.cmd_test_agent") as mock_test:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_test.assert_called_once_with("Dev Python", ANY)
+
+def test_cli_plan_registration():
+    from unittest.mock import ANY
+    with patch("sys.argv", ["arzor", "plan", "Crea", "un", "test"]), \
+         patch("cli.arzor.run_agent_loop") as mock_loop:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_loop.assert_called_once_with(
+            task="Crea un test",
+            tier=ANY,
+            auto_confirm=ANY,
+            agent_id=ANY,
+            base_url=ANY,
+            dry_run=True
+        )
