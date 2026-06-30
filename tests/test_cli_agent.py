@@ -151,5 +151,22 @@ def test_cli_team_registration():
             pass
         mock_team.assert_called_once_with("Crea un archivo", "Backend", ANY, ANY)
 
+def test_cli_whoami_registration():
+    with patch("sys.argv", ["arzor", "whoami"]), \
+         patch("cli.arzor.cmd_whoami") as mock_whoami:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_whoami.assert_called_once()
 
-
+def test_cli_register_registration():
+    with patch("sys.argv", ["arzor", "register"]), \
+         patch("cli.arzor.cmd_register") as mock_register:
+        try:
+            from cli.arzor import main
+            main()
+        except SystemExit:
+            pass
+        mock_register.assert_called_once()

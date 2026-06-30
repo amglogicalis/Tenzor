@@ -388,6 +388,86 @@ def cmd_login(base_url: str):
         print(c(f"  ✗ Error al iniciar sesión: {e}", "red"))
         print()
 
+def cmd_whoami(base_url: str):
+    """Muestra información sobre la sesión de usuario activa en el CLI."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ No has iniciado sesión.", "red"))
+        print(c("    Usa 'arzor login' para autenticarte con tus credenciales.", "gray"))
+        print()
+        return
+        
+    try:
+        with Spinner("Obteniendo perfil del usuario"):
+            result = api_get("/platform/auth/me", base_url)
+            
+        print(c("  🔮 Sesión de usuario activa en Arzor AIs 🔮", "cyan"))
+        print(c("  ════════════════════════════════════════════", "gray"))
+        print(f"  • Nombre público:  {c(result.get('display_name') or 'N/A', 'bold')}")
+        print(f"  • Email:           {c(result.get('email') or 'N/A', 'white')}")
+        print(f"  • Nombre de usuario:{c(result.get('username') or 'N/A', 'green')}")
+        print(f"  • ID de usuario:   {c(result.get('user_id') or 'N/A', 'cyan')}")
+        print(c("  ════════════════════════════════════════════", "gray"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al obtener información de la sesión: {e}", "red"))
+        print(c("    Es posible que tu token de sesión haya caducado. Prueba a hacer 'arzor login' de nuevo.", "gray"))
+        print()
+
+def cmd_register(base_url: str):
+    """Inicia asistente de registro interactivo para crear una nueva cuenta."""
+    header()
+    print(c("  ✨ Registrar Cuenta en la Plataforma Arzor AIs ✨", "cyan"))
+    print(c("  Completa los siguientes datos de registro (Ctrl+C para cancelar):\n", "gray"))
+    
+    try:
+        email = input(c("  [1/4] Email:                ", "bold")).strip()
+        if not email:
+            print(c("  ✗ El email es obligatorio.", "red"))
+            return
+            
+        username = input(c("  [2/4] Nombre de usuario:    ", "bold")).strip()
+        if not username:
+            print(c("  ✗ El nombre de usuario es obligatorio.", "red"))
+            return
+            
+        display_name = input(c("  [3/4] Nombre público/apodo: ", "bold")).strip()
+        if not display_name:
+            print(c("  ✗ El nombre público es obligatorio.", "red"))
+            return
+            
+        password = getpass.getpass(c("  [4/4] Contraseña (mín 6):   ", "bold")).strip()
+        if len(password) < 6:
+            print(c("  ✗ La contraseña debe tener al menos 6 caracteres.", "red"))
+            return
+            
+        print()
+        payload = {
+            "email": email,
+            "password": password,
+            "username": username,
+            "display_name": display_name
+        }
+        
+        with Spinner("Enviando registro de cuenta al servidor"):
+            api_post("/platform/auth/register", payload, base_url)
+            
+        print(c("  ✅ ¡Registro de cuenta completado con éxito! ✅", "green"))
+        print()
+        print(c("  🔔 IMPORTANTE: Confirmación de correo requerida", "yellow"))
+        print(c("  ===============================================", "gray"))
+        print(c("  Hemos enviado un enlace de confirmación al correo especificado.", "white"))
+        print(c("  Por favor, abre tu buzón y verifica tu dirección de email", "white"))
+        print(c("  antes de intentar iniciar sesión en tu consola con 'arzor login'.", "white"))
+        print()
+    except KeyboardInterrupt:
+        print(c("\n\n  ✗ Registro cancelado por el usuario.", "red"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al registrar la cuenta: {e}", "red"))
+        print()
+
+
 
 # ─── Comandos CLI Expandidos ──────────────────────────────────────────────────
 
@@ -1099,7 +1179,7 @@ def run_agent_loop(task: str, tier: str, auto_confirm: bool, agent_id: str, base
 
 def main():
     # Comprobar si se llama a un comando especial o a una tarea directa
-    special_commands = {"list-agents", "create-agent", "list-models", "login", "round-table", "debate", "team"}
+    special_commands = {"list-agents", "create-agent", "list-models", "login", "round-table", "debate", "team", "whoami", "user", "register", "signup"}
     
     # Manejar compatibilidad ergonómica directa
     is_special = len(sys.argv) > 1 and sys.argv[1] in special_commands
@@ -1111,6 +1191,8 @@ def main():
         epilog=textwrap.dedent("""
         Comandos de Administración:
           python cli/arzor.py login          → Inicia sesión y guarda tu token automáticamente
+          python cli/arzor.py register       → Crea una nueva cuenta interactiva en la plataforma
+          python cli/arzor.py whoami         → Muestra los detalles de tu cuenta de usuario conectada
           python cli/arzor.py list-agents    → Lista todos tus agentes personalizados
           python cli/arzor.py create-agent   → Asistente por pasos para crear un agente
           python cli/arzor.py list-models    → Muestra todos tus modelos de IA activos
@@ -1139,6 +1221,11 @@ def main():
         team_parser.add_argument("--agents", default="", help="Nombres o UUIDs de los agentes del equipo separados por comas")
         team_parser.add_argument("-y", "--yes", action="store_true", dest="auto_confirm", help="Modo automático: confirma herramientas sin preguntar")
         
+        subparsers.add_parser("whoami", help="Ver información sobre la sesión de usuario activa")
+        subparsers.add_parser("user", help="Alias de whoami")
+        subparsers.add_parser("register", help="Registrar una nueva cuenta en la plataforma")
+        subparsers.add_parser("signup", help="Alias de register")
+        
         # Argumentos compartidos globales de conexión
         parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
         args = parser.parse_args()
@@ -1155,6 +1242,10 @@ def main():
             cmd_round_table(args.url)
         elif args.command == "team":
             cmd_team_collaboration(" ".join(args.task), args.agents, args.url, args.auto_confirm)
+        elif args.command in ("whoami", "user"):
+            cmd_whoami(args.url)
+        elif args.command in ("register", "signup"):
+            cmd_register(args.url)
 
 
             

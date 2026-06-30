@@ -62,15 +62,31 @@ Puedes agregar esta línea a tu archivo de configuración del shell (`~/.bashrc`
 
 ---
 
-## 🔑 Autenticación (`login`)
+## 🔑 Autenticación y Registro (`login`, `register`, `whoami`)
 
-El CLI requiere un token JWT para comunicarse de forma segura con el backend. Para evitar tener que copiarlo manualmente del navegador, puedes iniciar sesión directamente desde la terminal:
+El CLI requiere un token JWT para comunicarse de forma segura con el backend. Puedes gestionar tu autenticación directamente desde la terminal con los siguientes comandos:
 
+### 1. Iniciar Sesión (`login`)
 ```bash
 arzor login
 ```
 * Te pedirá de forma interactiva tu **Email** y tu **Contraseña** (oculta por seguridad).
-* Tras validar con el servidor, guardará tu token de sesión automáticamente en el archivo `.env` local (`ARZOR_TOKEN="..."`).
+* Tras validar con el servidor, guardará tu token de sesión automáticamente en tu archivo `.env` global de Arzor (`ARZOR_TOKEN="..."`).
+
+### 2. Registrar Cuenta Nueva (`register` / `signup`)
+Si no tienes una cuenta de usuario, puedes registrarte en un segundo:
+```bash
+arzor register
+```
+* Solicita de forma interactiva tu **Email**, **Nombre de usuario**, **Nombre público/apodo** y una **Contraseña** segura.
+* **Aviso**: Recibirás un enlace de confirmación en tu correo electrónico. Es necesario hacer clic en él para verificar tu dirección antes de poder iniciar sesión con `arzor login`.
+
+### 3. Consultar Usuario Conectado (`whoami` / `user`)
+Para saber qué cuenta de usuario está activa en tu sesión actual de la consola:
+```bash
+arzor whoami
+```
+* Muestra el nombre, correo electrónico, nombre de usuario e identificador de cuenta de la sesión activa cargada en tu `.env`.
 
 ---
 
