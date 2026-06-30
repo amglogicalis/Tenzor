@@ -1,132 +1,20 @@
-# 🧠 Tenzor API
+# 🔮 Arzor AIs & Tenzor API
 
-Tenzor es una API privada e independiente de Inteligencia Artificial especializada exclusivamente en desarrollo de software, DevOps, e infraestructuras Cloud (AWS, Azure, GCP, Terraform, Docker, Kubernetes, CI/CD).
+> **Suite Profesional de Ingeniería de Software Autónoma**: Agente CLI interactivo local de desarrollo de código y API Gateway de inferencia avanzada especializada en Cloud, DevOps e Ingeniería de Sistemas.
 
-El proyecto está diseñado como un **API Gateway / Wrapper inteligente** que inyecta reglas estrictas a modelos base de alto rendimiento (Groq / Gemini) y gestiona un sistema de API Keys propio almacenado en Supabase, todo de manera 100% gratuita.
-
----
-
-## 🚀 Inicio Rápido (Local)
-
-### 1. Requisitos Previos
-Asegúrate de tener Python 3.10+ instalado en tu máquina.
-
-### 2. Configurar Variables de Entorno
-Copia el archivo de plantilla y renómbralo a `.env`:
-```bash
-cp .env.example .env
-```
-Abre `.env` y rellena tus claves:
-- `GROQ_API_KEY`: Tu API Key gratuita de [Groq Console](https://console.groq.com).
-- `GEMINI_API_KEY`: Tu API Key del plan Google AI PRO.
-- `ADMIN_SECRET_KEY`: Una clave secreta inventada por ti para proteger los endpoints de creación de API Keys.
-- *(Opcional)* `SUPABASE_URL` y `SUPABASE_KEY`: Credenciales de tu base de datos de Supabase. Si las dejas vacías, la API funcionará en **Modo Desarrollo (Dev Mode)** y aceptará cualquier key de cliente que comience con `tenzor-`.
-
-### 3. Ejecutar la Aplicación
-1. Crea y activa el entorno virtual:
-   ```bash
-   python -m venv venv
-   # En Windows (PowerShell):
-   .\venv\Scripts\Activate.ps1
-   # En Linux/macOS:
-   source venv/bin/activate
-   ```
-2. Instala las dependencias:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Inicia el servidor de desarrollo:
-   ```bash
-   python -m uvicorn app.main:app --reload --port 8000
-   ```
-
-El servidor estará corriendo en `http://127.0.0.1:8000`. Puedes abrir la documentación interactiva (Swagger UI) en `http://127.0.0.1:8000/docs`.
+[![Licencia](https://img.shields.io/badge/Licencia-Propietaria-red.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
 
 ---
 
-## 🛠️ Cómo Utilizar la API (OpenAI-Compatible)
+## 🔮 1. Arzor AIs (Agente de Desarrollo Autónomo Local)
 
-Tenzor es 100% compatible con el formato oficial de OpenAI. Esto significa que puedes usar las librerías oficiales de OpenAI en tus proyectos de Python o JS cambiando únicamente la URL base y la clave de acceso.
+**Arzor AIs** es un cliente de consola (CLI) avanzado y reactivo que ejecuta tareas de desarrollo de software directo sobre tu ordenador. Integra herramientas locales optimizadas de lectura/escritura de código en parches de red ligeros, búsquedas recursivas y control de rondas.
 
-### Ejemplo con `curl`:
-```bash
-curl -X POST http://127.0.0.1:8000/v1/chat/completions \
-  -H "Authorization: Bearer tenzor-tu-api-key-de-cliente" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      {"role": "user", "content": "¿Cómo despliego un bucket de S3 con Terraform?"}
-    ],
-    "temperature": 0.7
-  }'
-```
+### ⚡ Onboarding e Instalación Automática
 
-### Comportamiento de Filtrado (System Prompt):
-- Si preguntas algo de programación o Cloud, Tenzor responderá de forma experta y concisa.
-- Si le pides una receta de pizza, ayuda con marketing o cualquier tema no-IT, responderá exactamente:
-  > *Lo siento, soy una IA especializada exclusivamente en desarrollo de software e infraestructuras Cloud. No puedo ayudarte con ese tema.*
-
----
-
-## 🔑 Gestión de API Keys (Endpoints de Administración)
-
-Para crear, desactivar o listar las API Keys que das a tus usuarios o usas en otros proyectos, usa los endpoints `/admin`. Todas las peticiones al admin deben llevar la cabecera `X-Admin-Secret` con el valor que configuraste en tu `.env`.
-
-### 1. Crear una API Key para un usuario o proyecto:
-```bash
-curl -X POST http://127.0.0.1:8000/admin/keys \
-  -H "X-Admin-Secret: tu_clave_secreta_admin" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "owner_name": "Proyecto React",
-    "rate_limit": 150
-  }'
-```
-*Devuelve la API Key generada (Ej: `tenzor-31a89bc...`). Guárdala bien ya que no se puede volver a mostrar.*
-
-### 2. Listar todas las API Keys y su uso:
-```bash
-curl -X GET http://127.0.0.1:8000/admin/keys \
-  -H "X-Admin-Secret: tu_clave_secreta_admin"
-```
-
-### 3. Desactivar / Activar una Key:
-```bash
-curl -X PATCH "http://127.0.0.1:8000/admin/keys/<UUID_DE_LA_LLAVE>/status?is_active=false" \
-  -H "X-Admin-Secret: tu_clave_secreta_admin"
-```
-
----
-
-## 🚀 Despliegue en Render (100% Gratis)
-
-1. Sube este repositorio de código a tu cuenta privada de **GitHub** o **GitLab**.
-2. Entra en [Render.com](https://render.com) y crea un nuevo **Web Service**.
-3. Conéctalo a tu repositorio.
-4. Render detectará el `Dockerfile` automáticamente. Asegúrate de configurar la opción de despliegue como **Docker**.
-5. En la sección de **Environment Variables** de Render, añade tus variables de entorno:
-   - `GROQ_API_KEY`
-   - `GEMINI_API_KEY`
-   - `ADMIN_SECRET_KEY`
-   - `SUPABASE_URL`
-   - `SUPABASE_KEY`
-6. ¡Haz clic en Desplegar! Tu API tendrá una URL pública (ej: `https://tenzor-api.onrender.com`) lista para consumir 24/7.
-
----
-
-## 🔮 Arzor AIs CLI (Agente de Desarrollo Autónomo local)
-
-El proyecto incluye un potente cliente de consola autónomo e interactivo que ejecuta tareas de desarrollo local en tu ordenador:
-
-* **Autenticación y Registro**: `arzor login`, `arzor register`, `arzor whoami`, `arzor logout`
-* **Administración y Utilidades**: `arzor list-agents`, `arzor create-agent`, `arzor list-models`, `arzor status`, `arzor update`, `arzor test-agent`, `arzor list-keys`, `arzor add-keys`, `arzor remove-keys`
-* **Simulación y Deshacer**: `arzor plan`, `arzor clean`
-* **Colaboración**: `arzor debate`, `arzor team`
-* **Ejecución de Tareas ReAct**: `arzor "Crea un script que consuma la API"`
-
-### ⚡ Onboarding e Instalación Automática (Recomendado)
-
-Puedes preparar el entorno e instalar el comando `arzor` globalmente ejecutando el script interactivo correspondiente en la raíz del proyecto:
+Prepara tu entorno e instala el comando `arzor` globalmente en tu terminal ejecutando el script interactivo correspondiente:
 
 #### En Windows 🪟
 Abre PowerShell como **Administrador** y ejecuta:
@@ -134,17 +22,140 @@ Abre PowerShell como **Administrador** y ejecuta:
 Set-ExecutionPolicy RemoteSigned -Scope Process -Force
 .\setup.ps1
 ```
-*(O de forma directa omitiendo políticas: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`)*.
+*(O de forma directa omitiendo políticas: `powershell -ExecutionPolicy Bypass -File .\setup.ps1`)*
 
 #### En Linux / macOS 🐧🍎
-Abre tu terminal y ejecuta:
+Ejecuta desde la terminal:
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-**Nota**: Tras completar el asistente de setup por primera vez, cierra tu ventana de terminal actual y abre una nueva para que se cargue el comando `arzor` global en tu sistema.
+> [!NOTE]
+> Tras completar el asistente de setup por primera vez, cierra tu ventana de terminal actual y abre una nueva para que se cargue la variable global `arzor` en tu shell.
 
-Para obtener instrucciones completas, explicaciones detalladas de comandos y ejemplos de uso, consulta el **[Manual del CLI de Arzor AIs](cli_manual.md)**.
+---
 
+### 💻 Catálogo de Comandos del CLI
 
+El comando `arzor` expone los siguientes puntos de entrada de primer nivel:
+
+| Categoría | Comando | Descripción |
+| :--- | :--- | :--- |
+| **Sesión / Acceso** | `arzor login` | Inicia sesión de forma segura y persiste tu token JWT localmente. |
+| | `arzor logout` | Cierra la sesión activa borrando el token del entorno local. |
+| | `arzor whoami` | Muestra la identidad y correo de la cuenta vinculada al CLI. |
+| | `arzor register` | Asistente de registro interactivo en consola para crear cuentas. |
+| **Administración** | `arzor list-agents` | Lista los agentes de desarrollo personalizados de tu perfil. |
+| | `arzor create-agent` | Asistente por pasos interactivo para compilar nuevos agentes. |
+| | `arzor list-models` | Lista todos los modelos activos de tus proveedores configurados. |
+| | `arzor status` | Diagnóstico de red, latencia con el servidor y salud del token. |
+| | `arzor update` | Descarga de parches y reinstala el CLI en modo editable. |
+| **API Keys** | `arzor list-keys` | Muestra tus claves activas ofuscadas con máscara (`sk-****`). |
+| | `arzor add-keys [p] [k]` | Registra o actualiza una API key para un proveedor (Groq, Google, etc.). |
+| | `arzor remove-keys [p]` | Elimina del servidor la API Key del proveedor indicado. |
+| **Ejecución y Test** | `arzor "[tarea]"` | Inicia el bucle autónomo ReAct interactivo para resolver la tarea. |
+| | `arzor test-agent [a]` | Ping ligero de inferencia para evaluar la salud del modelo del agente. |
+| **Simulación y Deshacer**| `arzor plan "[tarea]"` | Dry-run síncrono en memoria; muestra parches de archivos sin alterar el disco. |
+| | `arzor clean` | Revierte y restaura por completo los archivos de la última tarea. |
+| **Colaboración** | `arzor debate` | Inicia una mesa redonda interactiva de debate entre tus agentes. |
+| | `arzor team "[tarea]"` | Divide una meta-tarea compleja coordinando un equipo en cascada. |
+
+Para instrucciones detalladas, parámetros avanzados del bucle ReAct (`--max-steps`, `--tier`) y ejemplos de uso, consulta el **[Manual Completo del CLI de Arzor AIs](cli_manual.md)**.
+
+---
+
+## 🧠 2. Tenzor API (API Gateway / Wrapper Inferencia)
+
+**Tenzor** es una API Gateway compatible con OpenAI especializada exclusivamente en Ingeniería de Software. Inyecta reglas estrictas de dominio fáctico a modelos base, gestiona cuotas y almacena claves en Supabase de forma transparente.
+
+### 🚀 Inicio Rápido Local (Desarrollo)
+
+1. **Configurar el Entorno**:
+   Copia el archivo de variables e ingresa tus API keys:
+   ```bash
+   cp .env.example .env
+   ```
+   *Rellena `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET_KEY` y opcionalmente tu base de datos de Supabase.*
+2. **Preparar Entorno Virtual**:
+   ```bash
+   python -m venv venv
+   # Activar (Ej: Windows PowerShell):
+   .\venv\Scripts\Activate.ps1
+   # Instalar dependencias:
+   pip install -r requirements.txt
+   ```
+3. **Lanzar el Servidor**:
+   ```bash
+   python -m uvicorn app.main:app --reload --port 8000
+   ```
+   *Accede a la documentación Swagger UI interactiva en `http://127.0.0.1:8000/docs`.*
+
+---
+
+### 🛠️ Consumo Compatible con OpenAI
+
+Puedes redirigir tus aplicaciones y librerías de OpenAI (Python/JS SDK) a Tenzor modificando únicamente la URL base y la clave de acceso.
+
+#### Ejemplo de Inferencia con `curl`
+```bash
+curl -X POST http://127.0.0.1:8000/v1/chat/completions \
+  -H "Authorization: Bearer tenzor-tu-api-key-de-cliente" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "¿Cómo despliego un clúster de GKE con Terraform?"}
+    ],
+    "temperature": 0.2
+  }'
+```
+
+#### Comportamiento del Dominio
+* Si preguntas sobre programación o Cloud ➔ Responderá con alto nivel de expertise técnica.
+* Si le pides recetas, marketing o preguntas fuera del dominio ➔ Responderá exactamente:
+  > *Lo siento, soy una IA especializada exclusivamente en desarrollo de software e infraestructuras Cloud. No puedo ayudarte con ese tema.*
+
+---
+
+### 🔑 Endpoints de Administración de API Keys (`/admin`)
+
+Requieren la cabecera de autenticación `X-Admin-Secret` configurada en tu archivo `.env`.
+
+* **Crear Clave de Cliente**:
+  ```bash
+  curl -X POST http://127.0.0.1:8000/admin/keys \
+    -H "X-Admin-Secret: tu_secreto_admin" \
+    -H "Content-Type: application/json" \
+    -d '{"owner_name": "Backend Produccion", "rate_limit": 200}'
+  ```
+* **Listar Claves y Métricas de Uso**:
+  ```bash
+  curl -X GET http://127.0.0.1:8000/admin/keys -H "X-Admin-Secret: tu_secreto_admin"
+  ```
+* **Desactivar Clave**:
+  ```bash
+  curl -X PATCH "http://127.0.0.1:8000/admin/keys/<UUID>/status?is_active=false" -H "X-Admin-Secret: tu_secreto_admin"
+  ```
+
+---
+
+### ☁️ Despliegue en la Nube (Render Docker)
+
+1. Sube este repositorio de código a tu cuenta privada de **GitHub**.
+2. En [Render.com](https://render.com), crea un nuevo **Web Service** y conéctalo al repositorio.
+3. El despliegue se configurará automáticamente como **Docker**.
+4. Inyecta tus claves y secretos en la sección de **Variables de Entorno**.
+5. ¡Haz clic en desplegar! Tu API estará activa en su URL de Render (ej: `https://tenzor-api.onrender.com`).
+
+---
+
+## 🛡️ 3. Licencia y Restricciones Operativas
+
+Este proyecto se distribuye bajo una **Licencia Propietaria Estricta de Derechos Reservados**. 
+
+Copyright (c) 2026 Adrián (amglogicalis). Todos los derechos reservados.
+
+* **Queda estrictamente prohibido**: La copia, duplicación, clonado, redistribución comercial, sublicenciamiento o alteración del Software sin consentimiento expreso previo por escrito del titular del copyright.
+* **Restricción de Inferencia e IA**: Se prohíbe explícitamente el uso de este software, su arquitectura, sus prompts del compilador AFT o su código fuente para el entrenamiento, ajuste fino (fine-tuning) o validación de modelos de Inteligencia Artificial (LLMs) o frameworks competitivos.
+
+Para el texto legal completo y penalizaciones, consulta el archivo **[LICENSE](LICENSE)**.
