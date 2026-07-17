@@ -201,24 +201,41 @@ class DevCrewService:
             context=context or "No hay contexto adicional.",
         )
 
-        try:
-            result = provider_router.infer(
-                messages=[{"role": "user", "content": prompt}],
-                tier=tier,
+        from app.services.provider_keys_db_service import provider_keys_db_service
+        from app.services.provider_key_pool_service import key_pool
+        
+        decrypted_keys = provider_keys_db_service.get_decrypted_user_keys(user_id)
+        for uk in decrypted_keys:
+            key_pool.add_user_key(
+                key_id=uk["key_id"],
+                provider=uk["provider"],
+                api_key=uk["api_key"],
                 user_id=user_id,
-                system_prompt=system,
-                temperature=0.3,   # baja temp para planes precisos
-                max_tokens=2000,
+                label=uk["key_label"],
+                priority=10
             )
-            plan = self._parse_json_response(result.content)
-            plan["_meta"] = {
-                "provider": result.provider,
-                "model": result.model,
-                "tokens_in": result.tokens_in,
-                "tokens_out": result.tokens_out,
-                "latency_ms": result.latency_ms,
-            }
-            return plan
+        
+        try:
+            try:
+                result = provider_router.infer(
+                    messages=[{"role": "user", "content": prompt}],
+                    tier=tier,
+                    user_id=user_id,
+                    system_prompt=system,
+                    temperature=0.3,   # baja temp para planes precisos
+                    max_tokens=2000,
+                )
+                plan = self._parse_json_response(result.content)
+                plan["_meta"] = {
+                    "provider": result.provider,
+                    "model": result.model,
+                    "tokens_in": result.tokens_in,
+                    "tokens_out": result.tokens_out,
+                    "latency_ms": result.latency_ms,
+                }
+                return plan
+            finally:
+                key_pool.remove_user_keys(user_id)
         except InferenceError as e:
             raise ValueError(f"Error al generar el plan: {e}")
 
@@ -265,24 +282,41 @@ class DevCrewService:
             agent_instructions=instructions or "Genera código limpio y bien documentado.",
         )
 
-        try:
-            result = provider_router.infer(
-                messages=[{"role": "user", "content": prompt}],
-                tier=tier,
+        from app.services.provider_keys_db_service import provider_keys_db_service
+        from app.services.provider_key_pool_service import key_pool
+        
+        decrypted_keys = provider_keys_db_service.get_decrypted_user_keys(user_id)
+        for uk in decrypted_keys:
+            key_pool.add_user_key(
+                key_id=uk["key_id"],
+                provider=uk["provider"],
+                api_key=uk["api_key"],
                 user_id=user_id,
-                system_prompt=system,
-                temperature=0.2,   # muy baja: código debe ser determinista
-                max_tokens=3000,
+                label=uk["key_label"],
+                priority=10
             )
-            code_result = self._parse_json_response(result.content)
-            code_result["_meta"] = {
-                "provider": result.provider,
-                "model": result.model,
-                "tokens_in": result.tokens_in,
-                "tokens_out": result.tokens_out,
-                "latency_ms": result.latency_ms,
-            }
-            return code_result
+        
+        try:
+            try:
+                result = provider_router.infer(
+                    messages=[{"role": "user", "content": prompt}],
+                    tier=tier,
+                    user_id=user_id,
+                    system_prompt=system,
+                    temperature=0.2,   # muy baja: código debe ser determinista
+                    max_tokens=3000,
+                )
+                code_result = self._parse_json_response(result.content)
+                code_result["_meta"] = {
+                    "provider": result.provider,
+                    "model": result.model,
+                    "tokens_in": result.tokens_in,
+                    "tokens_out": result.tokens_out,
+                    "latency_ms": result.latency_ms,
+                }
+                return code_result
+            finally:
+                key_pool.remove_user_keys(user_id)
         except InferenceError as e:
             raise ValueError(f"Error al generar el código: {e}")
 
@@ -307,34 +341,51 @@ class DevCrewService:
         else:
             system_prompt = _REACT_SYSTEM
 
-        try:
-            result = provider_router.infer(
-                messages=messages,
-                tier=tier,
+        from app.services.provider_keys_db_service import provider_keys_db_service
+        from app.services.provider_key_pool_service import key_pool
+        
+        decrypted_keys = provider_keys_db_service.get_decrypted_user_keys(user_id)
+        for uk in decrypted_keys:
+            key_pool.add_user_key(
+                key_id=uk["key_id"],
+                provider=uk["provider"],
+                api_key=uk["api_key"],
                 user_id=user_id,
-                system_prompt=system_prompt,
-                temperature=0.2,   # baja temperatura para consistencia de JSON
-                max_tokens=3000,
+                label=uk["key_label"],
+                priority=10
             )
-            
-            step_result = self._parse_json_response(result.content)
-            # Asegurar estructura mínima si el parser falló
-            if "error" in step_result and "raw_response" in step_result:
-                # Si falló el JSON, intentamos forzar un finish con la respuesta cruda para no colgar el cliente
-                step_result = {
-                    "thought": "Error de parseo JSON del LLM.",
-                    "action": "finish",
-                    "args": {"message": step_result["raw_response"]}
+        
+        try:
+            try:
+                result = provider_router.infer(
+                    messages=messages,
+                    tier=tier,
+                    user_id=user_id,
+                    system_prompt=system_prompt,
+                    temperature=0.2,   # baja temperatura para consistencia de JSON
+                    max_tokens=3000,
+                )
+                
+                step_result = self._parse_json_response(result.content)
+                # Asegurar estructura mínima si el parser falló
+                if "error" in step_result and "raw_response" in step_result:
+                    # Si falló el JSON, intentamos forzar un finish con la respuesta cruda para no colgar el cliente
+                    step_result = {
+                        "thought": "Error de parseo JSON del LLM.",
+                        "action": "finish",
+                        "args": {"message": step_result["raw_response"]}
+                    }
+                
+                step_result["_meta"] = {
+                    "provider": result.provider,
+                    "model": result.model,
+                    "tokens_in": result.tokens_in,
+                    "tokens_out": result.tokens_out,
+                    "latency_ms": result.latency_ms,
                 }
-            
-            step_result["_meta"] = {
-                "provider": result.provider,
-                "model": result.model,
-                "tokens_in": result.tokens_in,
-                "tokens_out": result.tokens_out,
-                "latency_ms": result.latency_ms,
-            }
-            return step_result
+                return step_result
+            finally:
+                key_pool.remove_user_keys(user_id)
         except InferenceError as e:
             raise ValueError(f"Error de inferencia en el agente: {e}")
 

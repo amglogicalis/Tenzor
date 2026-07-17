@@ -197,8 +197,20 @@ def _call_gemini(
         user_msg = ""
         chat_history = []
 
-    chat = gemini_model.start_chat(history=chat_history)
-    response = chat.send_message(user_msg)
+    import google.api_core.exceptions
+
+    try:
+        chat = gemini_model.start_chat(history=chat_history)
+        response = chat.send_message(user_msg)
+    except google.api_core.exceptions.ResourceExhausted as e:
+        raise _RateLimitError(429, f"Gemini Rate Limit: {e}")
+    except (google.api_core.exceptions.InvalidArgument, google.api_core.exceptions.PermissionDenied, google.api_core.exceptions.Unauthenticated) as e:
+        raise _AuthError(401, f"Gemini Auth Error: {e}")
+    except google.api_core.exceptions.ServiceUnavailable as e:
+        raise _ServiceError(503, f"Gemini Service Unavailable: {e}")
+    except google.api_core.exceptions.GoogleAPICallError as e:
+        raise _ProviderError(getattr(e, "code", 500), f"Gemini API Error: {e}")
+
     latency = (time.monotonic() - t0) * 1000
 
     content = response.text or ""

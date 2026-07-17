@@ -439,6 +439,7 @@ def execute_system_command(command: str) -> str:
             shell=True,
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=60
         )
         output = []
@@ -476,6 +477,8 @@ def api_get(path: str, base_url: str) -> Any:
         except Exception:
             pass
         raise RuntimeError(detail)
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Error de red/conexión al intentar comunicar con el servidor de Arzor ({base_url}). Verifica tu conexión a internet o el estado del backend.")
         
     try:
         return resp.json()
@@ -498,6 +501,8 @@ def api_post(path: str, payload: dict, base_url: str) -> Any:
         except Exception:
             pass
         raise RuntimeError(detail)
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Error de red/conexión al intentar comunicar con el servidor de Arzor ({base_url}). Verifica tu conexión a internet o el estado del backend.")
         
     try:
         return resp.json()
@@ -518,6 +523,8 @@ def api_delete(path: str, base_url: str) -> Any:
         except Exception:
             pass
         raise RuntimeError(detail)
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Error de red/conexión al intentar comunicar con el servidor de Arzor ({base_url}). Verifica tu conexión a internet o el estado del backend.")
         
     try:
         return resp.json()

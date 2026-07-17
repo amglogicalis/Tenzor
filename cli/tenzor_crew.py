@@ -60,6 +60,11 @@ def header():
 # ─── API Client ───────────────────────────────────────────────────────────────
 
 def api_post(path: str, payload: dict, base_url: str = DEFAULT_URL) -> dict:
+    if not TOKEN:
+        print(c("  ✗ Error: La variable de entorno ARZOR_TOKEN está vacía.", "red"))
+        print(c("    Regístrate o inicia sesión en la plataforma y configúrala en tu entorno o en el archivo .env", "gray"))
+        sys.exit(1)
+
     url = f"{base_url}{path}"
     headers = {"Content-Type": "application/json"}
     if TOKEN:

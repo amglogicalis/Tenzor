@@ -234,6 +234,9 @@ class PlatformChatService:
         )
         if cached_response:
             # HIT: devolver respuesta cacheada sin llamar al LLM
+            # Limpiar llaves descifradas en memoria del pool antes de retornar
+            key_pool.remove_user_keys(user_id)
+            
             msg_id = self._save_message(
                 session_id=session.session_id, role="user",
                 content=user_message, metadata={},

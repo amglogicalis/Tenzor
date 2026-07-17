@@ -69,7 +69,10 @@ class PlatformAuthService:
             })
         except Exception as e:
             logger.error(f"Error en sign_up de Supabase Auth: {e}")
-            raise ValueError("No se pudo crear la cuenta. El email puede estar ya registrado.")
+            err_msg = str(e)
+            if "rate limit" in err_msg.lower():
+                raise ValueError("Se ha superado el límite de envío de correos del servidor. Inténtalo de nuevo en una hora o contacta al administrador.")
+            raise ValueError(f"No se pudo crear la cuenta: {err_msg}")
 
         user = auth_response.user
         if not user:
@@ -87,8 +90,7 @@ class PlatformAuthService:
                 "display_name": display_name or username,
             }).execute()
         except Exception as e:
-            logger.error(f"Error insertando perfil para user {user_id}: {e}")
-            raise ValueError("Cuenta creada pero el perfil no pudo guardarse. Contacta al soporte.")
+            logger.warning(f"Error insertando perfil para user {user_id}: {e}. Se auto-creará dinámicamente en el primer inicio de sesión.")
 
         access_token = session.access_token if session else ""
         email_pending = session is None  # Supabase requiere confirmación de email
@@ -134,6 +136,21 @@ class PlatformAuthService:
 
         # Obtener perfil
         profile = self._get_profile_by_id(user.id)
+        if not profile:
+            # Auto-crear perfil si no existe (por ejemplo, por confirmación de email con RLS activo)
+            username_fallback = user.email.split("@")[0] if user.email else f"user_{user.id[:8]}"
+            try:
+                admin_client = self._admin or self.supabase
+                admin_client.table("profiles").insert({
+                    "id": user.id,
+                    "username": username_fallback,
+                    "display_name": username_fallback,
+                }).execute()
+                profile = {"id": user.id, "username": username_fallback, "display_name": username_fallback}
+                logger.info(f"PlatformAuthService: perfil auto-creado en login para user {user.id}")
+            except Exception as e:
+                logger.error(f"Error auto-creando perfil en login para user {user.id}: {e}")
+                profile = {}
 
         return {
             "access_token": session.access_token,
