@@ -59,7 +59,10 @@ class PlatformAuthService:
             .execute()
         )
         if existing.data:
-            raise ValueError(f"El nombre de usuario '{username}' ya está en uso.")
+            raise ValueError(
+                f"El nombre de usuario '{username}' ya está en uso o es demasiado común. "
+                "Por favor, elige un nombre más exclusivo, largo o seguro."
+            )
 
         # 2. Crear el usuario en Supabase Auth
         try:
@@ -72,7 +75,10 @@ class PlatformAuthService:
             err_msg = str(e)
             if "rate limit" in err_msg.lower():
                 raise ValueError("Se ha superado el límite de envío de correos del servidor. Inténtalo de nuevo en una hora o contacta al administrador.")
-            raise ValueError(f"No se pudo crear la cuenta: {err_msg}")
+            raise ValueError(
+                f"No se pudo crear la cuenta debido a falta de seguridad o formato incorrecto. "
+                f"Asegúrate de usar un email válido y una contraseña segura y exclusiva de al menos 8 caracteres (Error: {err_msg})."
+            )
 
         user = auth_response.user
         if not user:

@@ -32,6 +32,32 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": f"Error interno en el servidor de Tenzor: {str(exc)}"}
     )
 
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    if errors:
+        err = errors[0]
+        loc_list = err.get("loc", [])
+        loc_clean = [str(x) for x in loc_list if x != "body"]
+        loc = ".".join(loc_clean) if loc_clean else "campo"
+        msg = err.get("msg", "Formato inválido")
+        
+        friendly_msg = f"Error en '{loc}': {msg}. "
+        if "password" in loc.lower() and ("min_len" in err.get("type", "") or "greater_than" in err.get("type", "")):
+            friendly_msg += "La contraseña es demasiado corta o carece de la seguridad mínima requerida (debe tener al menos 8 caracteres)."
+        elif "username" in loc.lower():
+            friendly_msg += "El nombre de usuario debe ser exclusivo y seguro (entre 3 y 50 caracteres, compuesto de letras, números, guiones o guiones bajos)."
+        detail_str = friendly_msg
+    else:
+        detail_str = "Error de validación de datos en la solicitud."
+
+    return JSONResponse(
+        status_code=422,
+        content={"detail": detail_str}
+    )
+
 # Registrar Routers — Tenzor AI (chat técnico privado, API compatible OpenAI)
 app.include_router(chat.router)
 app.include_router(admin.router)
