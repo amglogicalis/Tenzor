@@ -158,6 +158,18 @@ Requieren la cabecera de autenticación `X-Admin-Secret` configurada en tu archi
 
 ---
 
+### 🧠 2.5 Bóvedas de Conocimiento (Second Brain RAG) y Onboarding de Alto Rendimiento
+
+Para que tus agentes tengan un nivel de razonamiento contextual de nivel experto, la plataforma soporta **Second Brain RAG** (Bóvedas de conocimiento interconectadas). Puedes conectar notas de Obsidian (`.md`), archivos de documentación técnica (`.pdf`) o manuales (`.txt`) al cerebro de cada agente.
+
+#### 💡 Recomendaciones Críticas para Máximo Rendimiento:
+> [!IMPORTANT]
+> - **Inyectar Múltiples API Keys**: El uso de RAG inyecta fragmentos de contexto directamente en tus prompts. Esto eleva el consumo de tokens y puede saturar cuotas de inferencia en segundos. Para evitar errores de tipo rate-limit (`429`), **registra 2 o más API Keys** en tu pool de proveedores mediante `arzor add-keys`.
+> - **Estructura por Encabezados**: Si usas Obsidian, asegúrate de organizar tus notas mediante encabezados de Markdown (`#`, `##`, `###`). El segmentador automático del backend dividirá las notas basándose en estas secciones, preservando el contexto semántico intacto.
+> - **Uso de Wikilinks**: El RAG resuelve automáticamente las interconexiones `[[Nota Relacionada]]` de Obsidian, indexándolas en un grafo relacional de Supabase para búsquedas expandidas.
+
+---
+
 ## 🛡️ 3. Licencia y Restricciones Operativas
 
 Este proyecto se distribuye bajo una **Licencia Propietaria Estricta de Derechos Reservados**. 

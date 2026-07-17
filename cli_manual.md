@@ -236,6 +236,40 @@ Por defecto (sin el flag `-y`), el CLI actúa de forma segura pidiéndote confir
 
 ---
 
+---
+
+## 🧠 Bóveda de Conocimiento (Second Brain RAG) `vault`
+
+El comando `arzor vault` te permite gestionar y subir el conocimiento técnico especializado (notas de Obsidian, documentación en PDF o manuales en texto plano) al cerebro del agente para enriquecer su contexto en las tareas autónomas.
+
+### 📋 Acciones Disponibles:
+
+#### 1. Listar archivos indexados (`list`)
+Muestra todos los documentos que el agente tiene actualmente cargados en su cerebro.
+```bash
+arzor vault list "Nombre o UUID de Agente"
+```
+
+#### 2. Añadir un archivo individual (`add`)
+Sube y vectoriza de forma inmediata un archivo de texto, Markdown o PDF.
+```bash
+arzor vault add "Nombre o UUID de Agente" "C:\ruta\a\tu\documento.pdf"
+```
+
+#### 3. Eliminar un archivo (`remove`)
+Elimina el archivo y limpia todas sus referencias y embeddings de Supabase en cascada.
+```bash
+arzor vault remove "Nombre o UUID de Agente" "nombre_de_archivo.md"
+```
+
+#### 4. Sincronización Incremental de Carpeta / Obsidian Vault (`sync`)
+Escanea recursivamente una carpeta local, detecta qué notas `.md` o `.txt` son nuevas o modificadas (usando hashes MD5) y sube únicamente las diferencias en lotes optimizados para no saturar la red.
+```bash
+arzor vault sync "Nombre o UUID de Agente" "C:\Users\Usuario\Obsidian\MiVault"
+```
+
+---
+
 ## 🔍 Resolución de Problemas
 
 * **Errores de codificación de caracteres (Unicode / Emoji)**:
