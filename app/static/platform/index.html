@@ -1647,6 +1647,9 @@ function renderAgentGrid(gridId, agents, showActions = false) {
       </div>
       ${showActions ? `<div class="agent-card-actions">
         <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();chatWithAgent('${a.id}')">💬 Chat</button>
+        <button class="btn btn-sm btn-ghost" title="${a.is_public ? 'Hacer privado' : 'Hacer público'}" onclick="event.stopPropagation();toggleAgentPublic('${a.id}', ${a.is_public})">
+          ${a.is_public ? '🔒' : '🌐'}
+        </button>
         <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteAgent('${a.id}','${esc(a.name)}')">🗑️</button>
       </div>` : ''}
     </div>
@@ -1700,6 +1703,16 @@ async function deleteAgent(agentId, name) {
   try {
     await api('DELETE', `/platform/agents/${agentId}`);
     toast('Agente eliminado', 'success');
+    loadAgents();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function toggleAgentPublic(agentId, currentIsPublic) {
+  const actionText = currentIsPublic ? 'hacer privado' : 'hacer público';
+  const endpoint = currentIsPublic ? `/platform/agents/${agentId}/unpublish` : `/platform/agents/${agentId}/publish`;
+  try {
+    await api('POST', endpoint);
+    toast(`Agente configurado como ${currentIsPublic ? 'privado' : 'público'}`, 'success');
     loadAgents();
   } catch(e) { toast(e.message, 'error'); }
 }
