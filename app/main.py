@@ -45,8 +45,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         msg = err.get("msg", "Formato inválido")
         
         friendly_msg = f"Error en '{loc}': {msg}. "
-        if "password" in loc.lower() and ("min_len" in err.get("type", "") or "greater_than" in err.get("type", "")):
+        if "password" in loc.lower():
             friendly_msg += "La contraseña es demasiado corta o carece de la seguridad mínima requerida (debe tener al menos 8 caracteres)."
+        elif "email" in loc.lower():
+            friendly_msg += "Por favor, introduce una dirección de correo electrónico válida (ejemplo: usuario@dominio.com)."
         elif "username" in loc.lower():
             friendly_msg += "El nombre de usuario debe ser exclusivo y seguro (entre 3 y 50 caracteres, compuesto de letras, números, guiones o guiones bajos)."
         detail_str = friendly_msg

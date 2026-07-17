@@ -1022,6 +1022,63 @@ def cmd_list_agents(base_url: str):
         print(c(f"  ✗ Error al obtener agentes: {e}", "red"))
         print()
 
+def cmd_publish_agent(agent_name_or_id: str, is_public: bool, base_url: str):
+    """Hace público (publica en biblioteca) o privado un agente personalizado."""
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado. Inicia sesión con 'arzor login' primero.", "red"))
+        return
+        
+    action_text = "publicar" if is_public else "hacer privado"
+    try:
+        # 1. Obtener la lista de agentes para resolver el ID si pasaron un nombre
+        with Spinner("Buscando agente"):
+            data = api_get("/platform/agents", base_url)
+        agents = data.get("agents", [])
+        
+        agent = None
+        # Buscar por ID exacto
+        for a in agents:
+            if a["id"] == agent_name_or_id:
+                agent = a
+                break
+        # Si no se encontró por ID, buscar por nombre exacto (case insensitive)
+        if not agent:
+            for a in agents:
+                if a["name"].lower() == agent_name_or_id.lower():
+                    agent = a
+                    break
+        # Si sigue sin encontrarse, buscar por coincidencia parcial en nombre
+        if not agent:
+            for a in agents:
+                if agent_name_or_id.lower() in a["name"].lower():
+                    agent = a
+                    break
+                    
+        if not agent:
+            print(c(f"  ✗ Error: No se encontró ningún agente con el nombre o ID '{agent_name_or_id}'.", "red"))
+            return
+            
+        agent_id = agent["id"]
+        agent_name = agent["name"]
+        
+        endpoint = f"/platform/agents/{agent_id}/publish" if is_public else f"/platform/agents/{agent_id}/unpublish"
+        
+        spinner_msg = f"Publicando agente '{agent_name}'" if is_public else f"Retirando agente '{agent_name}'"
+        with Spinner(spinner_msg):
+            api_post(endpoint, {}, base_url)
+            
+        if is_public:
+            print(c(f"  ✅ ¡El agente '{agent_name}' ahora es PÚBLICO! ✅", "green"))
+            print(c("     Aparecerá listado en la biblioteca pública de la plataforma.", "gray"))
+        else:
+            print(c(f"  🔒 ¡El agente '{agent_name}' ahora es PRIVADO! 🔒", "green"))
+            print(c("     Ha sido retirado de la biblioteca pública y solo tú tienes acceso a él.", "gray"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al {action_text} el agente: {e}", "red"))
+        print()
+
 def cmd_list_models(base_url: str):
     """Muestra los modelos disponibles en base a tus API keys activas."""
     header()
@@ -1818,7 +1875,8 @@ def main():
         "list-agents", "create-agent", "list-models", "login", 
         "round-table", "debate", "team", "whoami", "user", 
         "register", "signup", "logout", "status", "update", 
-        "clean", "test-agent", "plan", "list-keys", "add-keys", "remove-keys"
+        "clean", "test-agent", "plan", "list-keys", "add-keys", "remove-keys",
+        "publish", "unpublish"
     }
     
     # Manejar compatibilidad ergonómica directa de comandos especiales (ignorando flags y sus valores)
@@ -1902,6 +1960,12 @@ def main():
         
         remove_parser = subparsers.add_parser("remove-keys", help="Elimina una API Key por proveedor o UUID")
         remove_parser.add_argument("provider_or_id", help="Nombre del proveedor (ej: groq) o identificador UUID de la clave")
+        
+        publish_parser = subparsers.add_parser("publish", help="Hacer público un agente (añadirlo a la biblioteca pública)")
+        publish_parser.add_argument("agent", help="Nombre o UUID del agente personalizado a publicar")
+        
+        unpublish_parser = subparsers.add_parser("unpublish", help="Hacer privado un agente (retirarlo de la biblioteca pública)")
+        unpublish_parser.add_argument("agent", help="Nombre o UUID del agente personalizado a hacer privado")
 
         # Argumentos compartidos globales de conexión
         parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
@@ -1950,6 +2014,10 @@ def main():
             cmd_add_key(args.provider, args.api_key, args.label, args.url)
         elif args.command == "remove-keys":
             cmd_remove_key(args.provider_or_id, args.url)
+        elif args.command == "publish":
+            cmd_publish_agent(args.agent, True, args.url)
+        elif args.command == "unpublish":
+            cmd_publish_agent(args.agent, False, args.url)
             
     else:
         # Comportamiento por defecto: Ejecutar una tarea autónoma ReAct
