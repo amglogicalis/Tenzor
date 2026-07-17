@@ -1079,6 +1079,203 @@ def cmd_publish_agent(agent_name_or_id: str, is_public: bool, base_url: str):
         print(c(f"  ✗ Error al {action_text} el agente: {e}", "red"))
         print()
 
+def cmd_vault_dispatcher(args, base_url: str):
+    """Despacha la sub-acción del comando vault."""
+    if args.vault_action == "list":
+        cmd_vault_list(args.agent, base_url)
+    elif args.vault_action == "add":
+        cmd_vault_add(args.agent, args.file_path, base_url)
+    elif args.vault_action == "remove":
+        cmd_vault_remove(args.agent, args.file_id_or_name, base_url)
+    elif args.vault_action == "sync":
+        cmd_vault_sync(args.agent, args.folder_path, base_url)
+
+def cmd_vault_list(agent_query: str, base_url: str):
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado. Inicia sesión con 'arzor login' primero.", "red"))
+        return
+    try:
+        agent_id = resolve_agent_id(agent_query, base_url)
+        with Spinner("Cargando lista de archivos de la Bóveda"):
+            data = api_get(f"/platform/agents/{agent_id}/vault", base_url)
+        files = data.get("files", [])
+        
+        print(c(f"  🧠 Bóveda de Conocimiento del Agente ({len(files)} archivos):", "purple"))
+        print(c("  " + "═"*70, "gray"))
+        if not files:
+            print("  No hay archivos en la bóveda de este agente.")
+        else:
+            print(f"  {'UUID del Archivo':<38} | {'Tipo':<4} | {'Nombre del Archivo'}")
+            print("  " + "-"*70)
+            for f in files:
+                print(f"  {f['id']:<38} | {f['file_type']:<4} | {f['file_name']}")
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al listar archivos: {e}", "red"))
+
+def cmd_vault_add(agent_query: str, file_path: str, base_url: str):
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado. Inicia sesión con 'arzor login' primero.", "red"))
+        return
+    if not os.path.exists(file_path):
+        print(c(f"  ✗ Error: El archivo '{file_path}' no existe.", "red"))
+        return
+    try:
+        agent_id = resolve_agent_id(agent_query, base_url)
+        filename = os.path.basename(file_path)
+        
+        ext = filename.split(".")[-1].lower() if "." in filename else ""
+        if ext not in ("md", "txt", "pdf"):
+            print(c("  ✗ Error: Formato no soportado. Debe ser .md, .pdf o .txt", "red"))
+            return
+            
+        with open(file_path, "rb") as f:
+            file_bytes = f.read()
+            
+        endpoint = f"/platform/agents/{agent_id}/vault/upload"
+        mime_type = "text/plain"
+        if ext == "pdf":
+            mime_type = "application/pdf"
+        elif ext == "md":
+            mime_type = "text/markdown"
+            
+        files_payload = {
+            "file": (filename, file_bytes, mime_type)
+        }
+        
+        import requests
+        url_full = f"{base_url}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {TOKEN}"
+        }
+        
+        with Spinner(f"Subiendo y vectorizando '{filename}'"):
+            resp = requests.post(url_full, headers=headers, files=files_payload)
+            
+        if resp.status_code != 200:
+            err_detail = "Error en la subida."
+            try:
+                err_detail = resp.json().get("detail", err_detail)
+            except Exception:
+                pass
+            print(c(f"  ✗ Error del servidor: {err_detail}", "red"))
+            return
+            
+        res_data = resp.json()
+        status_res = res_data.get("status", "indexed")
+        if status_res == "skipped":
+            print(c(f"  ℹ️  El archivo '{filename}' ya estaba indexado y no ha sufrido cambios.", "yellow"))
+        else:
+            print(c(f"  ✅ ¡Archivo '{filename}' subido y vectorizado correctamente! ✅", "green"))
+            print(c(f"     Documento ID: {res_data.get('document_id')} | Chunks: {res_data.get('chunks_count')}", "gray"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al subir archivo: {e}", "red"))
+
+def cmd_vault_remove(agent_query: str, file_id_or_name: str, base_url: str):
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado. Inicia sesión con 'arzor login' primero.", "red"))
+        return
+    try:
+        agent_id = resolve_agent_id(agent_query, base_url)
+        
+        with Spinner("Buscando archivo en la Bóveda"):
+            data = api_get(f"/platform/agents/{agent_id}/vault", base_url)
+        files = data.get("files", [])
+        
+        target_file_id = None
+        target_file_name = None
+        for f in files:
+            if f["id"] == file_id_or_name or f["file_name"] == file_id_or_name:
+                target_file_id = f["id"]
+                target_file_name = f["file_name"]
+                break
+                
+        if not target_file_id:
+            print(c(f"  ✗ Error: No se encontró el archivo '{file_id_or_name}' en la bóveda.", "red"))
+            return
+            
+        with Spinner(f"Eliminando '{target_file_name}' del cerebro del agente"):
+            api_delete(f"/platform/agents/{agent_id}/vault/files/{target_file_id}", base_url)
+            
+        print(c(f"  🗑️ ¡Archivo '{target_file_name}' eliminado correctamente de la Bóveda! 🗑️", "green"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error al eliminar archivo: {e}", "red"))
+
+def cmd_vault_sync(agent_query: str, folder_path: str, base_url: str):
+    header()
+    if not TOKEN:
+        print(c("  ✗ Error: ARZOR_TOKEN no configurado. Inicia sesión con 'arzor login' primero.", "red"))
+        return
+    if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
+        print(c(f"  ✗ Error: La carpeta '{folder_path}' no existe o no es un directorio válido.", "red"))
+        return
+        
+    try:
+        agent_id = resolve_agent_id(agent_query, base_url)
+        
+        local_files = []
+        for root, dirs, filenames in os.walk(folder_path):
+            for fname in filenames:
+                ext = fname.split(".")[-1].lower() if "." in fname else ""
+                if ext in ("md", "txt"):
+                    full_path = os.path.join(root, fname)
+                    rel_name = os.path.relpath(full_path, folder_path).replace("\\", "/")
+                    local_files.append((full_path, rel_name, ext))
+                    
+        if not local_files:
+            print(c("  ✗ No se encontraron archivos .md o .txt locales para sincronizar.", "yellow"))
+            return
+            
+        print(c(f"  🧠 Sincronizando carpeta: '{folder_path}' ({len(local_files)} archivos encontrados)...", "purple"))
+        
+        sync_items = []
+        for path_local, rel_name, ext in local_files:
+            try:
+                with open(path_local, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                sync_items.append({
+                    "file_name": rel_name,
+                    "content": content,
+                    "file_type": ext
+                })
+            except Exception as e:
+                print(c(f"     [!] Error leyendo {rel_name}: {e}", "yellow"))
+                
+        if not sync_items:
+            return
+            
+        batch_size = 10
+        total_batches = (len(sync_items) + batch_size - 1) // batch_size
+        
+        print(c(f"  ⚡ Enviando sincronización incremental en {total_batches} lote(s)...", "gray"))
+        
+        for b_idx in range(total_batches):
+            batch = sync_items[b_idx*batch_size : (b_idx+1)*batch_size]
+            with Spinner(f"Sincronizando lote {b_idx+1}/{total_batches}"):
+                res = api_post(f"/platform/agents/{agent_id}/vault/sync", {"files": batch}, base_url)
+            
+            results = res.get("results", [])
+            for r in results:
+                fname = r.get("file_name")
+                status_res = r.get("status")
+                if status_res == "indexed":
+                    print(c(f"     ✅ Sincronizado (Nuevo/Modificado): {fname}", "green"))
+                elif status_res == "skipped":
+                    print(c(f"     🔹 Sin cambios: {fname}", "gray"))
+                else:
+                    print(c(f"     ❌ Fallo al sincronizar {fname}: {r.get('detail')}", "red"))
+                    
+        print(c("\n  🎉 ¡Proceso de sincronización completado! 🎉", "green"))
+        print()
+    except Exception as e:
+        print(c(f"  ✗ Error de sincronización masiva: {e}", "red"))
+        print()
+
 def cmd_list_models(base_url: str):
     """Muestra los modelos disponibles en base a tus API keys activas."""
     header()
@@ -1876,7 +2073,7 @@ def main():
         "round-table", "debate", "team", "whoami", "user", 
         "register", "signup", "logout", "status", "update", 
         "clean", "test-agent", "plan", "list-keys", "add-keys", "remove-keys",
-        "publish", "unpublish"
+        "publish", "unpublish", "vault"
     }
     
     # Manejar compatibilidad ergonómica directa de comandos especiales (ignorando flags y sus valores)
@@ -1967,6 +2164,24 @@ def main():
         unpublish_parser = subparsers.add_parser("unpublish", help="Hacer privado un agente (retirarlo de la biblioteca pública)")
         unpublish_parser.add_argument("agent", help="Nombre o UUID del agente personalizado a hacer privado")
 
+        vault_parser = subparsers.add_parser("vault", help="Gestiona la Bóveda de Conocimiento (Second Brain RAG) de un agente")
+        vault_subparsers = vault_parser.add_subparsers(dest="vault_action", required=True, help="Acción a realizar en el Vault")
+        
+        vlist = vault_subparsers.add_parser("list", help="Listar archivos del cerebro del agente")
+        vlist.add_argument("agent", help="Nombre o UUID del agente")
+        
+        vadd = vault_subparsers.add_parser("add", help="Añadir un archivo al cerebro del agente")
+        vadd.add_argument("agent", help="Nombre o UUID del agente")
+        vadd.add_argument("file_path", help="Ruta local del archivo (.md, .pdf, .txt)")
+        
+        vremove = vault_subparsers.add_parser("remove", help="Eliminar un archivo del cerebro del agente")
+        vremove.add_argument("agent", help="Nombre o UUID del agente")
+        vremove.add_argument("file_id_or_name", help="UUID o nombre exacto del archivo a eliminar")
+        
+        vsync = vault_subparsers.add_parser("sync", help="Sincronizar incrementalmente una carpeta local (Obsidian Vault)")
+        vsync.add_argument("agent", help="Nombre o UUID del agente")
+        vsync.add_argument("folder_path", help="Ruta de la carpeta local a sincronizar")
+
         # Argumentos compartidos globales de conexión
         parser.add_argument("--url", default=DEFAULT_URL, help="URL base del servidor de Arzor")
         args = parser.parse_args()
@@ -2018,6 +2233,8 @@ def main():
             cmd_publish_agent(args.agent, True, args.url)
         elif args.command == "unpublish":
             cmd_publish_agent(args.agent, False, args.url)
+        elif args.command == "vault":
+            cmd_vault_dispatcher(args, args.url)
             
     else:
         # Comportamiento por defecto: Ejecutar una tarea autónoma ReAct

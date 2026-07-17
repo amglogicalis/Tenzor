@@ -32,6 +32,7 @@ from app.db import supabase_admin
 from app.services.provider_router_service import provider_router, InferenceError
 from app.services.platform_rag_service import PlatformRAGService
 from app.services.agent_cache_service import AgentCacheService
+from app.services.agent_vault_service import AgentVaultService
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,7 @@ class PlatformChatService:
         self._sb: Optional[Client] = supabase_admin
         self._rag = PlatformRAGService()
         self._cache = AgentCacheService()
+        self._vault = AgentVaultService()
         if not self._sb:
             logger.warning("PlatformChatService: Supabase no configurado.")
         else:
@@ -208,15 +210,37 @@ class PlatformChatService:
         rag_context = ""
         if self._should_retrieve(user_message, retrieval_profile):
             top_k = retrieval_profile.get("top_k", 5) if retrieval_profile else 5
-            chunks = self._rag.search(
-                agent_id=agent_id,
-                query=user_message,
-                top_k=top_k,
-            )
-            if chunks:
-                rag_context = self._build_rag_block(chunks)
-                rag_chunks_used = len(chunks)
-                logger.info(f"Chat RAG: {len(chunks)} chunks recuperados para agent={agent_id}")
+            
+            # A. Buscar en el Vault de Conocimiento del agente (Second Brain)
+            vault_chunks = []
+            try:
+                vault_results = self._vault.search_vault(agent_id=agent_id, query=user_message, limit=top_k)
+                for r in vault_results:
+                    vault_chunks.append(r["chunk_content"])
+            except Exception as ev:
+                logger.error(f"Error buscando en el Vault del agente: {ev}")
+            
+            # B. Si falta cupo, buscar en la base de documentos generales
+            general_chunks = []
+            remaining_k = top_k - len(vault_chunks)
+            if remaining_k > 0:
+                try:
+                    chunks = self._rag.search(
+                        agent_id=agent_id,
+                        query=user_message,
+                        top_k=remaining_k,
+                    )
+                    for c in chunks:
+                        general_chunks.append(c.to_context_string())
+                except Exception as er:
+                    logger.error(f"Error al buscar en RAG general: {er}")
+            
+            # C. Consolidar el bloque de contexto
+            all_chunks = vault_chunks + general_chunks
+            if all_chunks:
+                rag_context = _RAG_BLOCK_HEADER + "\n\n".join(f"- {c}" for c in all_chunks)
+                rag_chunks_used = len(all_chunks)
+                logger.info(f"Chat RAG: {len(vault_chunks)} vault chunks, {len(general_chunks)} general chunks recuperados para agent={agent_id}")
 
         # 5. System prompt final (instrucciones + contexto RAG)
         final_system_prompt = system_instructions
