@@ -51,18 +51,14 @@ class AgentVaultService:
         Prioriza Gemini (si hay claves de API o en el config), de lo contrario OpenAI,
         y finalmente cae de forma segura en un vector sintético determinista.
         """
-        # Intentar con Google Gemini primero (text-embedding-004)
+        # Intentar con Google Gemini primero (embedding-001)
         gemini_key = os.getenv("GEMINI_API_KEY") or config.GEMINI_API_KEY
-        if gemini_key:
+        if gemini_key and gemini_key.strip().startswith("AIzaSy"):
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=gemini_key)
-                # Google Gemini text-embedding-004 devuelve 768 dimensiones por defecto
-                # Para Tenzor pgvector necesitamos un tamaño fijo de 1536 dimensiones.
-                # Para lograr esto, duplicamos el vector o lo rellenamos/proyectamos a 1536.
-                # También podemos usar OpenAI si está configurado para 1536.
                 response = genai.embed_content(
-                    model="models/text-embedding-004",
+                    model="models/embedding-001",
                     content=text,
                     task_type="retrieval_document"
                 )
