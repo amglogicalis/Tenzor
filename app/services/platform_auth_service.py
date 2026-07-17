@@ -180,13 +180,16 @@ class PlatformAuthService:
             logger.error(f"Error reenviando correo de confirmación para {email}: {e}")
             raise ValueError("No se pudo reenviar el correo de confirmación. Verifica tu email.")
 
-    def recover_password(self, email: str, redirect_to: str) -> None:
+    def recover_password(self, email: str, redirect_to: Optional[str] = None) -> None:
         """
         Envía un correo de restablecimiento de contraseña usando Supabase Auth.
         """
         self._require_supabase()
         try:
-            self.supabase.auth.reset_password_for_email(email, {"redirect_to": redirect_to})
+            options = {}
+            if redirect_to:
+                options["redirect_to"] = redirect_to
+            self.supabase.auth.reset_password_for_email(email, options)
         except Exception as e:
             logger.error(f"Error solicitando restablecimiento de contraseña para {email}: {e}")
             raise ValueError("No se pudo enviar el correo de recuperación. Verifica tu email.")
